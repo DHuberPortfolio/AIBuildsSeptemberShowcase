@@ -1,0 +1,200 @@
+{
+  "name": "Snapshot Backdating Fixture",
+  "description": "Test-only. Trims stored snapshots for the client competitor set and backdates them, so the next Competitor Watch run sees real new content and exercises the diff plus materiality scoring.",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c9892778-b32b-4372-ad2f-4980ce8f8ecd",
+      "name": "Run Simulation",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "IFCatfEx4kOoUeLf"
+        },
+        "returnAll": true
+      },
+      "id": "86dff360-25d4-4bd5-9646-76d5abcaf7c8",
+      "name": "Load Snapshots",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        48,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const TARGETS = ['elkandelk.com', 'nphm.com', 'slaterzurz.com', 'plevinandgallucci.com', 'misnylaw.com', 'corboydemetrio.com', 'salvilaw.com', 'cliffordlaw.com', 'rblaw.net'];\n\nfunction djb2(str) {\n  let h = 5381;\n  for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;\n  return h.toString(16);\n}\n\nconst lastMonth = new Date(Date.now() - 30 * 86400000).toISOString();\nconst out = [];\n\nfor (const item of $input.all()) {\n  const r = item.json;\n  if (!TARGETS.some(t => String(r.watch_url).includes(t))) continue;\n\n  const sents = String(r.content_text || '').split(/(?<=[.!?])\\s+/).filter(s => s.trim().length > 0);\n  if (sents.length < 6) continue;\n\n  // Keep every other sentence so the removed ones are spread across the whole\n  // page, not just the boilerplate tail. Those become 'new' on the next run.\n  const keep = sents.filter((s, i) => i % 2 === 0);\n  const trimmed = keep.join(' ');\n\n  out.push({ json: {\n    watch_url: r.watch_url,\n    content_hash: djb2(trimmed),\n    content_text: trimmed,\n    last_checked: lastMonth,\n    last_changed: lastMonth,\n    removed_sentences: sents.length - keep.length\n  } });\n}\n\nreturn out;"
+      },
+      "id": "a16b2cae-4c23-45f0-9f1e-8228625a3aa9",
+      "name": "Rewind Client Competitors",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "IFCatfEx4kOoUeLf"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "watch_url",
+              "keyValue": "={{ $json.watch_url }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "watch_url": "={{ $json.watch_url }}",
+            "content_hash": "={{ $json.content_hash }}",
+            "content_text": "={{ $json.content_text }}",
+            "last_checked": "={{ $json.last_checked }}",
+            "last_changed": "={{ $json.last_changed }}"
+          },
+          "matchingColumns": [
+            "watch_url"
+          ],
+          "schema": [
+            {
+              "id": "watch_url",
+              "displayName": "watch_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "content_hash",
+              "displayName": "content_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "content_text",
+              "displayName": "content_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_checked",
+              "displayName": "last_checked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_changed",
+              "displayName": "last_changed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9d7bc6c5-b339-46c6-baf0-6ad602233511",
+      "name": "Write Rewound Snapshots",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Test utility - not production\n\nTrims the stored snapshot for each client competitor down to roughly the first half of its sentences and backdates it 30 days.\n\nThe next Competitor Watch run then sees the removed sentences as genuinely new content, which exercises the diff and the materiality scoring against real page text instead of waiting a month.",
+        "height": 416,
+        "color": 5
+      },
+      "id": "ea952aff-5ea3-4b49-8be8-a730285af10b",
+      "name": "Sticky Note 33b54cd4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        512
+      ]
+    }
+  ],
+  "connections": {
+    "Run Simulation": {
+      "main": [
+        [
+          {
+            "node": "Load Snapshots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Snapshots": {
+      "main": [
+        [
+          {
+            "node": "Rewind Client Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rewind Client Competitors": {
+      "main": [
+        [
+          {
+            "node": "Write Rewound Snapshots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  }
+}

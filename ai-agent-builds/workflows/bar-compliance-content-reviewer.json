@@ -1,0 +1,213 @@
+{
+  "name": "Bar Compliance Content Reviewer",
+  "description": "Reviews legal marketing copy against attorney advertising rules. Layer 1 regex catches banned terms; Layer 2 LLM catches implied violations. Routes by confidence and reports its own accuracy.",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "cb9859ad-6487-4efc-9590-dad730d7405a",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const CLIENT_REGISTRY = {\n  \"C-OH-PI-01\": { state: \"OH\", practice_area: \"personal_injury\", auto_pass_threshold: 0.80 },\n  \"C-FL-PI-02\": { state: \"FL\", practice_area: \"personal_injury\", auto_pass_threshold: 0.90 },\n  \"C-TX-CD-03\": { state: \"TX\", practice_area: \"criminal_defense\", auto_pass_threshold: 0.80 },\n  \"C-NY-EM-04\": { state: \"NY\", practice_area: \"employment\", auto_pass_threshold: 0.90 },\n  \"C-OH-FA-05\": { state: \"OH\", practice_area: \"family\", auto_pass_threshold: 0.80 },\n  \"C-CA-IM-06\": { state: \"CA\", practice_area: \"immigration\", auto_pass_threshold: 0.85 },\n  \"C-NY-ES-07\": { state: \"NY\", practice_area: \"estate_planning\", auto_pass_threshold: 0.90 },\n  \"C-FL-BK-08\": { state: \"FL\", practice_area: \"bankruptcy\", auto_pass_threshold: 0.90 },\n  \"C-CA-EM-14\": { state: \"CA\", practice_area: \"employment\", auto_pass_threshold: 0.85 },\n  \"C-CA-ES-22\": { state: \"CA\", practice_area: \"estate_planning\", auto_pass_threshold: 0.85 },\n};\n\nconst EVAL_SET = [\n  { id: \"E01\", client_id: \"C-OH-PI-01\", content: \"Looking for the best personal injury lawyer in Columbus? Our firm has recovered millions for injured Ohioans.\", expected_violations: [\"SUPERLATIVE\", \"RESULTS_NO_DISCLAIMER\"], detectable_by: \"deterministic\" },\n  { id: \"E02\", client_id: \"C-FL-PI-02\", content: \"We are the #1 rated injury firm in Tampa Bay. When you need results, call the team that wins.\", expected_violations: [\"SUPERLATIVE\"], detectable_by: \"deterministic\" },\n  { id: \"E03\", client_id: \"C-TX-CD-03\", content: \"Dallas's premier criminal defense attorneys. Aggressive representation when your freedom is on the line.\", expected_violations: [\"SUPERLATIVE\"], detectable_by: \"deterministic\" },\n  { id: \"E04\", client_id: \"C-NY-EM-04\", content: \"As the top-rated employment law firm in Manhattan, we hold employers accountable.\", expected_violations: [\"SUPERLATIVE\", \"MISSING_ATTY_AD_LABEL\"], detectable_by: \"deterministic\" },\n  { id: \"E05\", client_id: \"C-OH-FA-05\", content: \"Our attorneys are specialists in high-asset divorce and complex custody matters.\", expected_violations: [\"SPECIALIST\"], detectable_by: \"deterministic\" },\n  { id: \"E06\", client_id: \"C-CA-IM-06\", content: \"Meet our team of immigration experts. We have guided thousands of families through the naturalization process.\", expected_violations: [\"SPECIALIST\"], detectable_by: \"deterministic\" },\n  { id: \"E07\", client_id: \"C-NY-ES-07\", content: \"Attorney Advertising. Our firm specializes in estate planning for New York families with multi-state property holdings.\", expected_violations: [\"SPECIALIST\"], detectable_by: \"deterministic\" },\n  { id: \"E08\", client_id: \"C-FL-BK-08\", content: \"Board certified specialist in consumer bankruptcy law serving Broward County.\", expected_violations: [\"SPECIALIST_CERT_UNNAMED\"], detectable_by: \"both\" },\n  { id: \"E09\", client_id: \"C-OH-PI-01\", content: \"We guarantee you will receive the maximum compensation available under Ohio law.\", expected_violations: [\"GUARANTEE\"], detectable_by: \"deterministic\" },\n  { id: \"E10\", client_id: \"C-TX-CD-03\", content: \"No fee guaranteed unless we win your case. That is our promise to every client.\", expected_violations: [\"GUARANTEE\"], detectable_by: \"deterministic\" },\n  { id: \"E11\", client_id: \"C-FL-PI-02\", content: \"We will win your case. Thirty years of trial experience means we do not lose.\", expected_violations: [\"GUARANTEE\"], detectable_by: \"deterministic\" },\n  { id: \"E12\", client_id: \"C-OH-PI-01\", content: \"Recent verdict: $4.2 million for a client injured in a commercial trucking collision on I-70.\", expected_violations: [\"RESULTS_NO_DISCLAIMER\"], detectable_by: \"deterministic\" },\n  { id: \"E13\", client_id: \"C-FL-PI-02\", content: \"$1,850,000 settlement recovered for a Miami motorcyclist struck by a distracted driver.\", expected_violations: [\"RESULTS_NO_DISCLAIMER\"], detectable_by: \"deterministic\" },\n  { id: \"E14\", client_id: \"C-CA-EM-14\", content: \"We secured a $750,000 wrongful termination award for a client in Santa Clara County. Prior results do not guarantee a similar outcome.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E15\", client_id: \"C-OH-PI-01\", content: \"Our track record speaks for itself. Call today and get the compensation you deserve.\", expected_violations: [\"IMPLIED_GUARANTEE\"], detectable_by: \"llm\" },\n  { id: \"E16\", client_id: \"C-TX-CD-03\", content: \"When we take a case to trial, prosecutors know what is coming. Charges tend not to survive our cross-examination.\", expected_violations: [\"IMPLIED_GUARANTEE\"], detectable_by: \"llm\" },\n  { id: \"E17\", client_id: \"C-CA-IM-06\", content: \"Every client who has come to us with a pending removal case is still here with their family today.\", expected_violations: [\"IMPLIED_GUARANTEE\", \"RESULTS_NO_DISCLAIMER\"], detectable_by: \"llm\" },\n  { id: \"E18\", client_id: \"C-FL-PI-02\", content: \"Insurance companies settle with us because they know how a jury will react. You will not leave empty handed.\", expected_violations: [\"IMPLIED_GUARANTEE\"], detectable_by: \"llm\" },\n  { id: \"E19\", client_id: \"C-OH-FA-05\", content: \"Mothers who work with our custody team walk out of court with the parenting time they asked for.\", expected_violations: [\"IMPLIED_GUARANTEE\"], detectable_by: \"llm\" },\n  { id: \"E20\", client_id: \"C-NY-EM-04\", content: \"Attorney Advertising. No other firm in the city handles retaliation claims the way we do. Others settle; we litigate.\", expected_violations: [\"IMPLIED_SUPERIORITY\"], detectable_by: \"llm\" },\n  { id: \"E21\", client_id: \"C-TX-CD-03\", content: \"If you hire anyone else, you are settling for less than your case is worth.\", expected_violations: [\"IMPLIED_SUPERIORITY\", \"UNVERIFIABLE_COMPARISON\"], detectable_by: \"llm\" },\n  { id: \"E22\", client_id: \"C-CA-ES-22\", content: \"Most estate planning attorneys use templates. We do not. That difference shows up when the will is contested.\", expected_violations: [\"UNVERIFIABLE_COMPARISON\"], detectable_by: \"llm\" },\n  { id: \"E23\", client_id: \"C-OH-PI-01\", content: \"\\\"They got me way more than I expected and the whole thing took six weeks.\\\" - Former client, Franklin County\", expected_violations: [\"TESTIMONIAL_NO_DISCLAIMER\"], detectable_by: \"llm\" },\n  { id: \"E24\", client_id: \"C-FL-BK-08\", content: \"\\\"The team walked me through every step and answered every question.\\\" - J.R., Fort Lauderdale. Testimonials do not constitute a guarantee, warranty, or prediction regarding the outcome of your legal matter.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E25\", client_id: \"C-NY-ES-07\", content: \"Attorney Advertising. \\\"Best decision I ever made. They saved my family a fortune in taxes.\\\" - Verified client review.\", expected_violations: [\"SUPERLATIVE\", \"TESTIMONIAL_NO_DISCLAIMER\"], detectable_by: \"deterministic\" },\n  { id: \"E26\", client_id: \"C-NY-EM-04\", content: \"Welcome to our firm. We represent employees across the five boroughs in wage and hour disputes.\", expected_violations: [\"MISSING_ATTY_AD_LABEL\"], detectable_by: \"deterministic\" },\n  { id: \"E27\", client_id: \"C-NY-ES-07\", content: \"Attorney Advertising. Our estate planning practice serves families throughout Westchester and Long Island.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E28\", client_id: \"C-OH-PI-01\", content: \"Welcome to our firm. We represent injured workers throughout central Ohio.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E29\", client_id: \"C-OH-FA-05\", content: \"Ohio courts decide custody according to the best interests of the child. We help you present that case clearly.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E30\", client_id: \"C-CA-EM-14\", content: \"Our attorneys work with expert witnesses in economics and vocational rehabilitation to document lost earning capacity.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E31\", client_id: \"C-TX-CD-03\", content: \"We follow industry best practices for evidence preservation and maintain chain-of-custody documentation.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E32\", client_id: \"C-OH-PI-01\", content: \"An accident reconstruction expert may be retained to analyze vehicle positioning and impact speed.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E33\", client_id: \"C-FL-BK-08\", content: \"It is in your best interest to gather statements from the last six months before your consultation.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E34\", client_id: \"C-OH-PI-01\", content: \"Our practice focuses on motor vehicle collision claims in central Ohio. We offer free consultations and handle cases on a contingency basis.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E35\", client_id: \"C-CA-IM-06\", content: \"We concentrate in family-based immigration petitions. Processing times are set by USCIS and vary by service center.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E36\", client_id: \"C-TX-CD-03\", content: \"A DWI charge in Texas carries administrative license consequences separate from the criminal case. We can explain both tracks at your consultation.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E37\", client_id: \"C-OH-FA-05\", content: \"Ohio requires a separation period before certain dissolution filings. Our team can walk you through the timeline that applies to your situation.\", expected_violations: [], detectable_by: \"none\" },\n  { id: \"E38\", client_id: \"C-FL-PI-02\", content: \"Named to the 2025 Super Lawyers list for personal injury litigation in Florida.\", expected_violations: [\"AWARD_CLAIM_REVIEW\"], detectable_by: \"llm\" },\n  { id: \"E39\", client_id: \"C-CA-EM-14\", content: \"Over 95% of our wage claims resolve before trial.\", expected_violations: [\"STATISTIC_NO_CONTEXT\"], detectable_by: \"llm\" },\n  { id: \"E40\", client_id: \"C-OH-PI-01\", content: \"Serving injured Ohioans since 1987. More than 3,000 clients represented across 38 counties.\", expected_violations: [], detectable_by: \"none\" },\n];\n\nreturn EVAL_SET.map(row => {\n  const cfg = CLIENT_REGISTRY[row.client_id];\n  if (!cfg) throw new Error('Unknown client_id: ' + row.client_id);\n  return {\n    json: {\n      id: row.id,\n      content: row.content,\n      client_id: row.client_id,\n      state: cfg.state,\n      practice_area: cfg.practice_area,\n      auto_pass_threshold: cfg.auto_pass_threshold,\n      expected_violations: row.expected_violations,\n      expected_flag: row.expected_violations.length > 0,\n      detectable_by: row.detectable_by,\n    },\n  };\n});"
+      },
+      "id": "9cc39382-f1a2-4a4b-8dff-017829ce1b11",
+      "name": "Load Clients and Eval Set",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const DISCLAIMER_PATTERNS = [\n  /prior results do not guarantee[^.]*\\./gi,\n  /past results (do not|don't) guarantee[^.]*\\./gi,\n  /testimonials do not constitute[^.]*\\./gi,\n  /results (may )?var(y|ies)[^.]*\\./gi,\n  /every case is different[^.]*\\./gi,\n  /no (representation|guarantee) is made[^.]*\\./gi,\n];\n\nfunction stripDisclaimers(text) {\n  let stripped = text;\n  const found = [];\n  for (const p of DISCLAIMER_PATTERNS) {\n    const m = stripped.match(p);\n    if (m) found.push(...m.map(s => s.trim()));\n    stripped = stripped.replace(p, ' ');\n  }\n  return { stripped, disclaimers: found };\n}\n\nconst BASE_RULES = [\n  {\n    code: 'SUPERLATIVE',\n    severity: 'blocking',\n    basis: 'ABA Model Rule 7.1 - unverifiable comparative claim',\n    patterns: [\n      /\\bbest\\b(?!\\s+(?:interests?|practices?))/i,\n      /#\\s?1\\b/,\n      /\\bnumber one\\b/i,\n      /\\btop[-\\s]rated\\b/i,\n      /\\bpremier\\b/i,\n      /\\b(finest|greatest)\\b/i,\n      /\\bmost successful\\b/i,\n      /\\bunmatched|unparalleled\\b/i,\n    ],\n  },\n  {\n    code: 'SPECIALIST',\n    severity: 'blocking',\n    basis: 'ABA Model Rule 7.4 - specialist claim without accredited certification',\n    patterns: [\n      /\\bspecial(?:ist|ists|ize|izes|izing|ization)\\b/i,\n      /(?<!\\b(?:witness|reconstruction|forensic|medical|vocational|economic)\\s)\\bexperts?\\b(?!\\s+(?:witness|witnesses|testimony|report))/i,\n    ],\n  },\n  {\n    code: 'GUARANTEE',\n    severity: 'blocking',\n    basis: 'ABA Model Rule 7.1 - guarantee or prediction of outcome',\n    patterns: [\n      /\\bguarantee[sd]?\\b/i,\n      /\\bwe will win\\b/i,\n      /\\bwe (?:do not|don't|never) lose\\b/i,\n      /\\bpromise\\b/i,\n    ],\n  },\n];\n\nconst CONDITIONAL_RULES = [\n  {\n    code: 'RESULTS_NO_DISCLAIMER',\n    severity: 'review',\n    basis: 'Most jurisdictions require a results disclaimer alongside verdict or settlement figures',\n    test: (s, ctx) => (/\\$[\\d,]+(?:\\.\\d+)?\\s*(?:million|billion|m\\b|k\\b)?/i.test(s)\n      || /\\b(?:millions|billions)\\b/i.test(s)) && ctx.disclaimers.length === 0,\n  },\n  {\n    code: 'TESTIMONIAL_NO_DISCLAIMER',\n    severity: 'review',\n    basis: 'Client testimonial presented without required disclaimer',\n    test: (s, ctx) => /[\"\\u201c][^\"\\u201d]{15,}[\"\\u201d]\\s*[-\\u2013\\u2014]\\s*\\S/.test(s) && ctx.disclaimers.length === 0,\n  },\n  {\n    code: 'SPECIALIST_CERT_UNNAMED',\n    severity: 'blocking',\n    basis: 'Certification claimed without naming the certifying organization',\n    test: (s) => /\\bboard[-\\s]certified\\b/i.test(s) && !/certified by\\s+the\\s+\\S+/i.test(s),\n  },\n];\n\nconst STATE_RULES = {\n  NY: [{\n    code: 'MISSING_ATTY_AD_LABEL',\n    severity: 'blocking',\n    basis: \"NY Rule 7.1(f) - advertising must be labeled 'Attorney Advertising'\",\n    test: (s) => !/attorney advertising/i.test(s),\n  }],\n  FL: [{\n    code: 'FL_PREFILING_REVIEW',\n    severity: 'advisory',\n    basis: 'Florida Bar requires pre-publication review for many advertisement types',\n    test: (s) => /\\$[\\d,]+/.test(s) || /\\bverdict|settlement\\b/i.test(s),\n  }],\n};\n\nconst item = $input.item.json;\nconst { stripped, disclaimers } = stripDisclaimers(item.content);\nconst ctx = { disclaimers };\nconst hits = [];\n\nfor (const rule of BASE_RULES) {\n  for (const p of rule.patterns) {\n    const m = stripped.match(p);\n    if (m) {\n      hits.push({ code: rule.code, severity: rule.severity, basis: rule.basis,\n                  matched_text: m[0].trim(), layer: 'deterministic' });\n      break;\n    }\n  }\n}\n\nfor (const rule of [...CONDITIONAL_RULES, ...(STATE_RULES[item.state] || [])]) {\n  if (rule.test(stripped, ctx)) {\n    hits.push({ code: rule.code, severity: rule.severity, basis: rule.basis,\n                matched_text: null, layer: 'deterministic' });\n  }\n}\n\nconst llm_prompt = 'You are reviewing marketing copy for a law firm advertising in ' + item.state + ' (practice area: ' + item.practice_area + ').\\n\\nYour job is to find violations of attorney advertising rules that a keyword scanner CANNOT catch - claims that are problematic because of what they IMPLY, not because of any specific banned word.\\n\\nLook for:\\n- IMPLIED_GUARANTEE: language creating an unjustified expectation of a particular outcome, without using the word \"guarantee\"\\n- IMPLIED_SUPERIORITY: claims of being better than other firms, without using a superlative\\n- UNVERIFIABLE_COMPARISON: comparisons to other lawyers that cannot be factually substantiated\\n- STATISTIC_NO_CONTEXT: success rates or percentages presented without the context needed to interpret them\\n- AWARD_CLAIM_REVIEW: awards, rankings, or list placements that may require naming the granting organization and its selection methodology\\n- TESTIMONIAL_ISSUE: client testimonials implying typical results\\n- RESULTS_NO_DISCLAIMER: described outcomes (even non-monetary) presented without a results disclaimer\\n\\nDo NOT report simple banned keywords such as \"best\", \"#1\", \"specialist\", \"expert\", or \"guarantee\" - a separate deterministic layer already handles those. Report only implied or contextual problems.\\n\\nBe conservative. A false positive trains the content team to ignore this system. If copy is factual, verifiable, and makes no outcome promise, return an empty findings array.\\n\\nCOPY TO REVIEW:\\n\"\"\"\\n' + item.content + '\\n\"\"\"\\n\\nRespond with ONLY valid JSON, no preamble or code fences, in exactly this shape:\\n{\"findings\": [{\"code\": \"IMPLIED_GUARANTEE\", \"quote\": \"the exact span of text at issue\", \"reasoning\": \"one sentence on why this implies something the rules prohibit\", \"confidence\": 0.0}]}\\nSet confidence between 0 and 1, reflecting how certain you are that a reviewer would agree this is a violation.';\n\nreturn {\n  json: {\n    ...item,\n    deterministic_hits: hits,\n    disclaimers_found: disclaimers,\n    llm_prompt,\n  },\n};"
+      },
+      "id": "5c980cf8-9715-48f6-9ed6-11c0a5d14b77",
+      "name": "Layer 1 Deterministic Scan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"claude-sonnet-5\", max_tokens: 1200, messages: [ { role: \"user\", content: $json.llm_prompt } ] }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "a08af2f4-f395-470d-89d4-8c55464eeb61",
+      "name": "Layer 2 LLM Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        528,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const src = $('Layer 1 Deterministic Scan').item.json;\nconst resp = $input.item.json;\n\nlet llm_findings = [];\nlet llm_status = 'ok';\nlet usage = { input_tokens: 0, output_tokens: 0 };\n\ntry {\n  if (resp.error) throw new Error(resp.error.message || 'api error');\n\n  // Models with adaptive thinking return content as an array of blocks, and a\n  // thinking block can come first. Find the text block by type; never assume [0].\n  const blocks = Array.isArray(resp.content) ? resp.content : [];\n  const textBlock = blocks.find(b => b && b.type === 'text');\n  const raw = textBlock && textBlock.text;\n  if (!raw) throw new Error('no text block in response (blocks: ' + blocks.map(b => b && b.type).join(',') + ')');\n\n  usage = resp.usage || usage;\n\n  const cleaned = raw.replace(/^\\s*```(?:json)?/i, '').replace(/```\\s*$/, '').trim();\n  const parsed = JSON.parse(cleaned);\n  llm_findings = Array.isArray(parsed.findings) ? parsed.findings : [];\n} catch (e) {\n  llm_status = 'error: ' + e.message;\n}\n\nconst threshold = src.auto_pass_threshold;\nconst gating_llm = llm_findings.filter(f => (f.confidence ?? 0) >= threshold);\nconst advisory_llm = llm_findings.filter(f => (f.confidence ?? 0) < threshold);\nconst blocking_det = src.deterministic_hits.filter(h => h.severity === 'blocking');\nconst review_det = src.deterministic_hits.filter(h => h.severity === 'review');\nconst advisory_det = src.deterministic_hits.filter(h => h.severity === 'advisory');\n\nlet decision;\nlet decision_reason;\n\nif (llm_status !== 'ok') {\n  decision = 'REVIEW_REQUIRED';\n  decision_reason = 'Layer 2 unavailable - failing safe to human review';\n} else if (blocking_det.length > 0) {\n  decision = 'BLOCK';\n  decision_reason = 'Deterministic blocking rule(s): ' + blocking_det.map(h => h.code).join(', ');\n} else if (review_det.length > 0 || gating_llm.length > 0) {\n  decision = 'REVIEW_REQUIRED';\n  decision_reason = [...review_det.map(h => h.code), ...gating_llm.map(f => f.code + ' (' + f.confidence + ')')].join(', ');\n} else if (advisory_det.length > 0 || advisory_llm.length > 0) {\n  decision = 'PASS_WITH_NOTES';\n  decision_reason = [...advisory_det.map(h => h.code), ...advisory_llm.map(f => f.code + ' (' + f.confidence + ', below ' + threshold + ')')].join(', ');\n} else {\n  decision = 'PASS';\n  decision_reason = 'No findings';\n}\n\nconst all_codes = [...src.deterministic_hits.map(h => h.code), ...gating_llm.map(f => f.code)];\nconst cost_usd = (usage.input_tokens / 1e6) * 2 + (usage.output_tokens / 1e6) * 10;\n\nreturn {\n  json: {\n    id: src.id,\n    client_id: src.client_id,\n    state: src.state,\n    content: src.content,\n    decision,\n    decision_reason,\n    flagged: decision !== 'PASS',\n    deterministic_hits: src.deterministic_hits,\n    llm_findings,\n    llm_status,\n    gating_codes: all_codes,\n    expected_violations: src.expected_violations,\n    expected_flag: src.expected_flag,\n    detectable_by: src.detectable_by,\n    input_tokens: usage.input_tokens,\n    output_tokens: usage.output_tokens,\n    cost_usd: Number(cost_usd.toFixed(6)),\n    reviewed_at: new Date().toISOString(),\n  },\n};"
+      },
+      "id": "6136764f-7108-45be-9c28-5238f7116314",
+      "name": "Merge and Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nlet tp = 0, fp = 0, fn = 0, tn = 0;\nlet gating_fp = 0;\nlet det_only = 0, llm_only = 0, both = 0;\nconst misses = [];\nconst false_alarms = [];\n\nconst GATING = ['BLOCK', 'REVIEW_REQUIRED'];\n\nfor (const r of rows) {\n  const flagged = r.flagged;\n  const should = r.expected_flag;\n  if (should && flagged) {\n    tp++;\n    const d = r.deterministic_hits.length > 0;\n    const l = (r.llm_findings || []).length > 0;\n    if (d && l) both++; else if (d) det_only++; else if (l) llm_only++;\n  } else if (!should && flagged) {\n    fp++;\n    if (GATING.includes(r.decision)) gating_fp++;\n    false_alarms.push({ id: r.id, decision: r.decision, why: r.decision_reason, gating: GATING.includes(r.decision), excerpt: r.content.slice(0, 80) });\n  } else if (should && !flagged) {\n    fn++;\n    misses.push({ id: r.id, expected: r.expected_violations, detectable_by: r.detectable_by, excerpt: r.content.slice(0, 80) });\n  } else {\n    tn++;\n  }\n}\n\nconst pct = (n, d) => d === 0 ? null : Number(((n / d) * 100).toFixed(1));\nconst violating = tp + fn;\nconst clean = tn + fp;\nconst total_cost = rows.reduce((s, r) => s + (r.cost_usd || 0), 0);\nconst total_in = rows.reduce((s, r) => s + (r.input_tokens || 0), 0);\nconst total_out = rows.reduce((s, r) => s + (r.output_tokens || 0), 0);\nconst errors = rows.filter(r => r.llm_status !== 'ok').length;\n\nconst byDecision = rows.reduce((acc, r) => {\n  acc[r.decision] = (acc[r.decision] || 0) + 1;\n  return acc;\n}, {});\n\nconst stp = pct(byDecision.PASS || 0, rows.length);\n\nreturn [{\n  json: {\n    run_at: new Date().toISOString(),\n    documents_evaluated: rows.length,\n    accuracy: {\n      catch_rate_pct: pct(tp, violating),\n      false_positive_rate_pct: pct(fp, clean),\n      gating_false_positive_rate_pct: pct(gating_fp, clean),\n      precision_pct: pct(tp, tp + fp),\n      true_positives: tp,\n      false_positives: fp,\n      false_positives_gating: gating_fp,\n      false_negatives: fn,\n      true_negatives: tn,\n    },\n    layer_attribution: {\n      caught_by_deterministic_only: det_only,\n      caught_by_llm_only: llm_only,\n      caught_by_both: both,\n      note: 'llm_only is the number of violations regex structurally could not find. If this is 0, the LLM layer is not earning its cost.',\n    },\n    routing: { by_decision: byDecision, straight_through_pct: stp },\n    reliability: {\n      llm_errors: errors,\n      error_rate_pct: pct(errors, rows.length),\n      note: 'Errored documents route to human review, never to auto-pass.',\n    },\n    cost: {\n      total_usd: Number(total_cost.toFixed(4)),\n      per_document_usd: Number((total_cost / rows.length).toFixed(6)),\n      input_tokens: total_in,\n      output_tokens: total_out,\n      projected_usd_per_1000_docs: Number(((total_cost / rows.length) * 1000).toFixed(2)),\n    },\n    misses,\n    false_alarms,\n  },\n}];"
+      },
+      "id": "f882af45-1bb5-409e-9269-a014749217ec",
+      "name": "Scorecard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Two-layer review\n\nLayer 1 catches unambiguous violations with regex: best, #1, specialist, guarantee, results without a disclaimer, NY labeling. Free, instant, cannot hallucinate.\n\nLayer 2 catches what regex structurally cannot, such as \"get the compensation you deserve\" - an implied guarantee with no banned word.\n\nDisclaimers are stripped before scanning, because the compliant disclaimer itself contains the word \"guarantee\".",
+        "height": 576,
+        "color": 4
+      },
+      "id": "4e1e356e-d4d7-4190-b891-08fdfc3a1be1",
+      "name": "Sticky Note ab8bb12e",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Measured, not assumed\n\nGround truth for 40 documents is carried through the pipeline and compared here.\n\nThe headline metric is gating false positive rate - clean copy wrongly sent to a human. A reviewer that flags everything gets ignored in a week, and then it protects nobody.",
+        "height": 368,
+        "color": 3
+      },
+      "id": "47fddac3-c039-4979-8ad2-459f86f81481",
+      "name": "Sticky Note dd6e919f",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        992,
+        496
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Load Clients and Eval Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Clients and Eval Set": {
+      "main": [
+        [
+          {
+            "node": "Layer 1 Deterministic Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 1 Deterministic Scan": {
+      "main": [
+        [
+          {
+            "node": "Layer 2 LLM Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 2 LLM Review": {
+      "main": [
+        [
+          {
+            "node": "Merge and Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge and Route": {
+      "main": [
+        [
+          {
+            "node": "Scorecard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  }
+}

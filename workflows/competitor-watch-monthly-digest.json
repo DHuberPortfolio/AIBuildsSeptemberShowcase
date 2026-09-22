@@ -1,0 +1,484 @@
+{
+  "name": "Competitor Watch - Monthly Client Digest",
+  "description": "Monthly competitor monitoring. Watches competitor websites per client, detects what changed since last month, scores materiality, and builds a per-client digest.",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "74cf51ae-bf26-4049-9418-329f5b43bff6",
+      "name": "Monthly Sweep",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "IFCatfEx4kOoUeLf"
+        },
+        "returnAll": true
+      },
+      "id": "db193b1f-cb7a-4137-be4a-105e42982fcb",
+      "name": "Load Snapshots",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        304
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "5Kri4wflks4ztpTn"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "active",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "aca02f57-818c-409e-9754-48f58dfa148c",
+      "name": "Load Registry",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        304
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.watch_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (compatible; CompetitorWatch/0.1)"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "maxRedirects": 5
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "html"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "afa618cc-8003-4770-998a-3e792355e521",
+      "name": "Fetch Competitor Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const priorRows = $('Load Snapshots').all().map(i => i.json);\nconst prior = {};\nfor (const r of priorRows) prior[r.watch_url] = r;\n\nconst reg = $('Load Registry').all().map(i => i.json);\nconst fetched = $input.all().map(i => i.json);\nconst now = new Date().toISOString();\n\nfunction textify(html) {\n  return String(html || '')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<nav[\\s\\S]*?<\\/nav>/gi, ' ')\n    .replace(/<footer[\\s\\S]*?<\\/footer>/gi, ' ')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;|&amp;|&quot;|&#39;/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction djb2(str) {\n  let h = 5381;\n  for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;\n  return h.toString(16);\n}\n\nfunction sentences(t) {\n  return t.split(/(?<=[.!?])\\s+/).map(s => s.trim()).filter(s => s.length > 40);\n}\n\nconst out = [];\nfor (let i = 0; i < reg.length; i++) {\n  const r = reg[i];\n  const f = fetched[i] || {};\n  const text = textify(f.html);\n\n  if (!text || text.length < 200) {\n    out.push({ json: { ...r, status: 'fetch_failed', changed: false, added_text: '', content_text: '', content_hash: '', last_checked: now, last_changed: (prior[r.watch_url] || {}).last_changed || '' } });\n    continue;\n  }\n\n  const hash = djb2(text);\n  const before = prior[r.watch_url];\n\n  if (!before) {\n    out.push({ json: { ...r, status: 'baseline_created', changed: false, added_text: '', content_text: text.slice(0, 20000), content_hash: hash, last_checked: now, last_changed: now } });\n    continue;\n  }\n\n  if (before.content_hash === hash) {\n    out.push({ json: { ...r, status: 'unchanged', changed: false, added_text: '', content_text: text.slice(0, 20000), content_hash: hash, last_checked: now, last_changed: before.last_changed } });\n    continue;\n  }\n\n  const oldSet = new Set(sentences(before.content_text || ''));\n  const added = sentences(text).filter(s => !oldSet.has(s));\n  out.push({ json: { ...r, status: 'changed', changed: true, added_text: added.join('\\n').slice(0, 6000), added_count: added.length, content_text: text.slice(0, 20000), content_hash: hash, last_checked: now, last_changed: now } });\n}\n\nreturn out;"
+      },
+      "id": "a7d210a7-547f-41c4-8932-6adc455f187f",
+      "name": "Hash and Diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "IFCatfEx4kOoUeLf"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "watch_url",
+              "keyValue": "={{ $json.watch_url }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "watch_url"
+          ],
+          "value": {
+            "watch_url": "={{ $json.watch_url }}",
+            "content_hash": "={{ $json.content_hash }}",
+            "content_text": "={{ $json.content_text }}",
+            "last_checked": "={{ $json.last_checked }}",
+            "last_changed": "={{ $json.last_changed }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "950110cc-e5fe-4de0-8918-0723c8c7ae06",
+      "name": "Save Snapshots",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        304
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Hash and Diff').all().map(i => i.json);\nconst changed = rows.filter(r => r.changed && r.added_text && r.added_text.length > 60);\n\nreturn changed.map(r => {\n  const prompt = 'You monitor competitors on behalf of a law firm marketing agency.\\n\\nOUR CLIENT: ' + r.client_firm + ' (' + r.practice_area + ', ' + r.market + ')\\nCOMPETITOR: ' + r.competitor_name + '\\nPAGE: ' + r.page_label + ' (' + r.watch_url + ')\\n\\nBelow is text that is NEW on this competitor page since last month. Report only what would change how our client competes.\\n\\nCATEGORIES:\\n- AWARD_OR_RANKING, PERSONNEL, PRACTICE_EXPANSION, CASE_RESULT, BRAND_CHANGE, COMPARATIVE_CLAIM, MEDIA_MOMENT\\n\\nMATERIALITY SCALE - calibrate against these anchors, do not cluster:\\n\\n0.0-0.2 ROUTINE. Reworded copy, a new blog post on a generic legal topic, formatting or navigation changes, seasonal safety tips, boilerplate. Most changes belong here.\\n\\n0.3-0.5 MINOR. A new case result of ordinary size for this practice area (a personal injury firm publishes these constantly). A new associate added. One more award listing among many. A substantive blog post on a topic our client also targets.\\n\\n0.6-0.7 NOTABLE. A case result well above what this competitor normally publishes. A senior or well known attorney joining. A significant ranking such as a Best Lawyers Law Firm of the Year listing. A visible repositioning of an existing practice area.\\n\\n0.8-0.9 SIGNIFICANT. A record setting or headline verdict that resets market expectations. A name partner joining or departing. A new office, new city, or entry into a new practice area. A major media moment such as leading a nationally covered case.\\n\\n1.0 CRITICAL. A merger or acquisition. Firm dissolution. Disciplinary or disbarment news. Advertising copy that directly targets or disparages our client.\\n\\nBe strict. If you are scoring most items above 0.6 you are miscalibrated. A brief that flags everything gets ignored, and then it protects nobody.\\n\\nNEW TEXT:\\n\"\"\"\\n' + r.added_text + '\\n\"\"\"\\n\\nRespond with ONLY valid JSON, no preamble or code fences:\\n{\"findings\": [{\"category\": \"CASE_RESULT\", \"headline\": \"one short line\", \"detail\": \"one or two sentences of what changed\", \"why_it_matters\": \"one sentence on the impact for our client\", \"materiality\": 0.0}]}\\n\\nReturn an empty findings array if nothing clears 0.3.';\n  return { json: { ...r, scoring_prompt: prompt } };\n});"
+      },
+      "id": "a584c17f-c5c4-4ceb-ade9-9fa0ff619048",
+      "name": "Prepare Materiality Scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"claude-sonnet-5\", max_tokens: 6000, messages: [ { role: \"user\", content: $json.scoring_prompt } ] }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 1500
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "cfdc0597-3431-443f-b39f-0c1eebe6fa76",
+      "name": "Score Materiality",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1328,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const src = $('Prepare Materiality Scoring').all().map(i => i.json);\nconst resp = $input.all().map(i => i.json);\nconst all = $('Hash and Diff').all().map(i => i.json);\nconst MATERIAL = 0.65;\n\nconst byClient = {};\nconst scoreSpread = [];\nlet errors = 0;\nlet inTok = 0, outTok = 0;\n\nfor (let i = 0; i < src.length; i++) {\n  const r = src[i];\n  const raw = resp[i] || {};\n  let findings = [];\n  try {\n    if (raw.error) throw new Error(raw.error.message || 'api error');\n    const blocks = Array.isArray(raw.content) ? raw.content : [];\n    const textBlock = blocks.find(b => b && b.type === 'text');\n    if (!textBlock || !textBlock.text) throw new Error('no text block');\n    const u = raw.usage || {};\n    inTok += u.input_tokens || 0;\n    outTok += u.output_tokens || 0;\n    const cleaned = textBlock.text.replace(/^\\s*```(?:json)?/i, '').replace(/```\\s*$/, '').trim();\n    const parsed = JSON.parse(cleaned);\n    findings = Array.isArray(parsed.findings) ? parsed.findings : [];\n  } catch (e) {\n    errors++;\n    findings = [{ category: 'REVIEW_MANUALLY', headline: 'Change detected but scoring failed', detail: (r.added_text || '').slice(0, 300), why_it_matters: 'Scoring unavailable: ' + e.message, materiality: 1 }];\n  }\n\n  for (const f of findings) {\n    scoreSpread.push(f.materiality ?? 0);\n    if ((f.materiality ?? 0) < MATERIAL) continue;\n    byClient[r.client_id] = byClient[r.client_id] || { client_id: r.client_id, client_firm: r.client_firm, market: r.market, practice_area: r.practice_area, items: [] };\n    byClient[r.client_id].items.push({ competitor: r.competitor_name, source_url: r.watch_url, page: r.page_label, category: f.category, headline: f.headline, detail: f.detail, why_it_matters: f.why_it_matters, materiality: f.materiality });\n  }\n}\n\nconst digests = Object.keys(byClient).map(k => {\n  const d = byClient[k];\n  d.items.sort((a, b) => (b.materiality || 0) - (a.materiality || 0));\n  return d;\n});\n\nconst cost = (inTok / 1e6) * 2 + (outTok / 1e6) * 10;\nscoreSpread.sort((a, b) => a - b);\n\nreturn [{\n  json: {\n    run_at: new Date().toISOString(),\n    threshold: MATERIAL,\n    coverage: {\n      pages_watched: all.length,\n      fetch_failed: all.filter(r => r.status === 'fetch_failed').length,\n      baselines_created: all.filter(r => r.status === 'baseline_created').length,\n      unchanged: all.filter(r => r.status === 'unchanged').length,\n      changed: all.filter(r => r.status === 'changed').length\n    },\n    scoring: {\n      pages_scored: src.length,\n      scoring_errors: errors,\n      candidate_findings: scoreSpread.length,\n      score_spread: scoreSpread,\n      note: 'score_spread should span low and high values. If it clusters near the threshold the scale is miscalibrated.'\n    },\n    signal_ratio: {\n      changes_detected: src.length,\n      material_findings: digests.reduce((s, d) => s + d.items.length, 0),\n      note: 'If material_findings approaches changes_detected, the bar is too low and the brief will become noise.'\n    },\n    cost_usd: Number(cost.toFixed(4)),\n    digests\n  }\n}];"
+      },
+      "id": "38e2bafa-e66f-4f2a-85cf-f7e55eb4ceb3",
+      "name": "Build Client Digests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Watchlist, not a news firehose\n\nThe agency works with one firm per practice area per market, so every client has a known, finite competitor set. That turns an unbounded news problem into a bounded monitoring problem: watch these ten firms, not the internet.\n\nThe strongest signal is the competitor own website. Awards, new attorneys, new practice areas, published verdicts and rebrands all appear there first, and it needs no API key.",
+        "height": 496,
+        "color": 4
+      },
+      "id": "d7cfc349-7e2b-40dd-93c2-e5c22bf4063a",
+      "name": "Sticky Note 084b31fe",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        384,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Signal ratio is the metric\n\nMost website changes are routine copy edits. The materiality bar exists so the digest stays worth opening.\n\nIf material_findings approaches changes_detected, the bar is too low. A monthly digest nobody reads is worse than no digest.",
+        "height": 352,
+        "color": 3
+      },
+      "id": "c0866c6f-85b2-4186-b9d3-950286dee2f6",
+      "name": "Sticky Note 6da6c68b",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const run = $input.first().json;\nconst digests = Array.isArray(run.digests) ? run.digests : [];\nconst period = new Date(run.run_at || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });\n\nif (digests.length === 0) {\n  return [{ json: {\n    client_id: 'ALL',\n    client_firm: 'All clients',\n    period,\n    quiet: true,\n    pages_watched: run.coverage.pages_watched,\n    brief_prompt: 'Write two sentences for a law firm leadership team confirming that competitor monitoring ran for ' + period + ' across ' + run.coverage.pages_watched + ' competitor pages and found no significant changes worth their attention. Plain business English. Do not mention software, AI, scoring, or any system detail. Do not pad it.'\n  } }];\n}\n\nreturn digests.map(d => {\n  const lines = d.items.map((it, n) =>\n    (n + 1) + '. COMPETITOR: ' + it.competitor +\n    '\\n   WHAT CHANGED: ' + it.headline +\n    '\\n   DETAIL: ' + it.detail +\n    '\\n   COMPETITIVE IMPACT: ' + it.why_it_matters +\n    '\\n   SOURCE: ' + it.source_url\n  ).join('\\n\\n');\n\n  const prompt = 'You are writing the monthly competitive brief for the leadership team at ' + d.client_firm + ', a ' + String(d.practice_area).replace(/_/g, ' ') + ' law firm in ' + d.market + '.\\n\\nYour readers are attorneys and firm executives. They are not technical. Write the way a sharp strategy consultant writes a memo.\\n\\nHARD RULES:\\n- Never mention AI, models, scoring, confidence, thresholds, automation, workflows, or any system detail. The reader must never sense a machine was involved.\\n- No jargon, no bullet-point fragments, no headers like OVERVIEW or ANALYSIS.\\n- Name competitors plainly and say who they are in a few words the first time they appear.\\n- Every claim must trace to the findings below. Invent nothing. If something is unclear, leave it out.\\n- Be brief. A partner should read this in ninety seconds.\\n\\nSTRUCTURE:\\n1. A short opening paragraph naming the single most important development this month and what it means for the firm.\\n2. One short paragraph per competitor that had activity. Say who they are, what changed, and why the firm should care.\\n3. A closing paragraph headed exactly \"What we recommend\" with two or three specific, concrete actions the firm could take in response. Recommend marketing and positioning actions, not legal strategy.\\n\\nPeriod: ' + period + '\\n\\nFINDINGS:\\n' + lines + '\\n\\nRespond with ONLY the brief text. No preamble, no JSON, no code fences, no title line.';\n\n  return { json: {\n    client_id: d.client_id,\n    client_firm: d.client_firm,\n    market: d.market,\n    period,\n    quiet: false,\n    finding_count: d.items.length,\n    competitors: d.items.map(i => i.competitor).filter((v, i, a) => a.indexOf(v) === i),\n    items: d.items,\n    brief_prompt: prompt\n  } };\n});"
+      },
+      "id": "c0dd03cc-2313-4475-9cb1-b8380c3a4812",
+      "name": "Prepare Brief Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"claude-sonnet-5\", max_tokens: 6000, messages: [ { role: \"user\", content: $json.brief_prompt } ] }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 1500
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 90000
+        }
+      },
+      "id": "0e59c5af-e074-4696-9bea-95193a991673",
+      "name": "Write Executive Brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1984,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const src = $('Prepare Brief Input').all().map(i => i.json);\nconst resp = $input.all().map(i => i.json);\nconst run = $('Build Client Digests').first().json;\n\nconst briefs = [];\nlet errors = 0;\nlet inTok = 0, outTok = 0;\n\nfor (let i = 0; i < src.length; i++) {\n  const s = src[i];\n  const raw = resp[i] || {};\n  let text = '';\n\n  try {\n    if (raw.error) throw new Error(raw.error.message || 'api error');\n    const blocks = Array.isArray(raw.content) ? raw.content : [];\n    const textBlock = blocks.find(b => b && b.type === 'text');\n    if (!textBlock || !textBlock.text) throw new Error('no text block');\n    const u = raw.usage || {};\n    inTok += u.input_tokens || 0;\n    outTok += u.output_tokens || 0;\n    text = textBlock.text.trim();\n  } catch (e) {\n    errors++;\n    text = 'This brief could not be generated automatically this month. The underlying findings are attached below and need a manual write-up before sending.';\n  }\n\n  const title = 'Competitive Brief - ' + s.client_firm + ' - ' + s.period;\n  const sources = (s.items || []).map(it => '- ' + it.competitor + ': ' + it.source_url)\n    .filter((v, idx, a) => a.indexOf(v) === idx);\n\n  briefs.push({\n    client_id: s.client_id,\n    client_firm: s.client_firm,\n    period: s.period,\n    title,\n    brief_text: text,\n    competitors_covered: s.competitors || [],\n    finding_count: s.finding_count || 0,\n    sources,\n    ready_to_send: errors === 0 && !s.quiet,\n    full_document: title + '\\n' + '='.repeat(title.length) + '\\n\\n' + text + (sources.length ? '\\n\\nSources\\n' + sources.join('\\n') : '')\n  });\n}\n\nconst briefCost = (inTok / 1e6) * 2 + (outTok / 1e6) * 10;\n\nreturn [{\n  json: {\n    run_at: run.run_at,\n    period: src[0] ? src[0].period : '',\n    briefs_written: briefs.length,\n    brief_errors: errors,\n    coverage: run.coverage,\n    scoring: run.scoring,\n    signal_ratio: run.signal_ratio,\n    cost_usd_total: Number((Number(run.cost_usd || 0) + briefCost).toFixed(4)),\n    briefs\n  }\n}];"
+      },
+      "id": "b7af981c-4d9b-4028-aebb-3a28147eff10",
+      "name": "Finalize Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Monthly Sweep": {
+      "main": [
+        [
+          {
+            "node": "Load Snapshots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Snapshots": {
+      "main": [
+        [
+          {
+            "node": "Load Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Registry": {
+      "main": [
+        [
+          {
+            "node": "Fetch Competitor Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Competitor Page": {
+      "main": [
+        [
+          {
+            "node": "Hash and Diff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash and Diff": {
+      "main": [
+        [
+          {
+            "node": "Save Snapshots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Snapshots": {
+      "main": [
+        [
+          {
+            "node": "Prepare Materiality Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Materiality Scoring": {
+      "main": [
+        [
+          {
+            "node": "Score Materiality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Materiality": {
+      "main": [
+        [
+          {
+            "node": "Build Client Digests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Client Digests": {
+      "main": [
+        [
+          {
+            "node": "Prepare Brief Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Brief Input": {
+      "main": [
+        [
+          {
+            "node": "Write Executive Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Executive Brief": {
+      "main": [
+        [
+          {
+            "node": "Finalize Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  }
+}
