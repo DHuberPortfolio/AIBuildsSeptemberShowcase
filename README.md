@@ -10,13 +10,15 @@ Every build here answers the same three questions: what does it do, how often is
 
 | | |
 |---|---|
-| [`workflows/metadata-enrichment-agent.json`](workflows/metadata-enrichment-agent.json) | Tags incoming news against a controlled vocabulary. Deterministic entity resolution and deduplication, an LLM enrichment call, then a conformance guard that decides what may reach the index. 16 nodes. |
-| [`workflows/bar-compliance-content-reviewer.json`](workflows/bar-compliance-content-reviewer.json) | Reviews legal marketing copy against attorney advertising rules. Regex catches banned terms, the model catches implied ones, and the workflow reports its own accuracy. 8 nodes. |
-| [`workflows/competitor-watch-monthly-digest.json`](workflows/competitor-watch-monthly-digest.json) | Monthly competitor monitoring: snapshot, diff, score materiality, build a per-client digest. 14 nodes. |
-| [`workflows/competitor-registry-builder.json`](workflows/competitor-registry-builder.json) | Reads internal links off a competitor homepage and identifies the case-results, attorneys, awards and news pages regardless of what they are called. 9 nodes. |
-| [`workflows/assessment-template-test-harness.json`](workflows/assessment-template-test-harness.json) | Runs a transcript through a long, rule-heavy clinical documentation prompt so prompt changes can be regression-tested against a fixed input rather than eyeballed. 2 nodes. |
-| [`workflows/snapshot-backdating-fixture.json`](workflows/snapshot-backdating-fixture.json) | Test utility. Trims and backdates stored snapshots so a competitor-watch run has real change to detect. 5 nodes. |
+| [`workflows/metadata-enrichment-agent/`](workflows/metadata-enrichment-agent/) | Tags incoming news against a controlled vocabulary. Deterministic entity resolution and deduplication, an LLM pass, then a conformance guard that decides what may reach the index. 16 nodes. |
+| [`workflows/bar-compliance-content-reviewer/`](workflows/bar-compliance-content-reviewer/) | Reviews legal marketing copy against attorney advertising rules. Regex catches banned terms, the model catches implied ones, and the workflow reports its own accuracy. 8 nodes. |
+| [`workflows/competitor-watch-monthly-digest/`](workflows/competitor-watch-monthly-digest/) | Monthly competitor monitoring: snapshot, diff, score materiality, build a per-client digest. 14 nodes. |
+| [`workflows/competitor-registry-builder/`](workflows/competitor-registry-builder/) | Reads internal links off a competitor homepage and identifies which pages are worth watching, regardless of what they are called. 9 nodes. |
+| [`workflows/assessment-template-test-harness/`](workflows/assessment-template-test-harness/) | Runs a transcript through a long, rule-heavy clinical documentation prompt so prompt changes can be regression-tested against a fixed input. 2 nodes. |
+| [`workflows/snapshot-backdating-fixture/`](workflows/snapshot-backdating-fixture/) | Test utility. Trims and backdates stored snapshots so a competitor-watch run has real change to detect. 5 nodes. |
 | [`eval/metadata-enrichment/`](eval/metadata-enrichment/) | Runs the metadata agent's deterministic layers outside n8n and reproduces a recorded production run, figure for figure. |
+
+Every workflow folder carries a README covering what the build does, how it is wired, what it does when it is wrong, and how to run it.
 
 ## The evaluation harness
 
@@ -32,13 +34,13 @@ node verify.js
 
 No dependencies, no network, no API key. All 56 figures — the routing split, per-facet precision, recall and F1, the deduplication pairs, the review-queue precision, cost to six decimals — come out identical to the run that produced them.
 
-That is the point of the layout. If the guard is deterministic, its behaviour should be reproducible by anyone, and a claim about it should be checkable rather than taken on trust. The same harness backs the [interactive demo](https://devinhuber.com/projects/metadata/#demo) on the site, which ships these same node bodies to the browser and executes them there.
+That is the point of the layout. If the guard is deterministic, its behaviour should be reproducible by anyone, and a claim about it should be checkable rather than taken on trust. The same harness backs the [interactive demo](https://devinhuber.com/demo/) on the site, which ships these same node bodies to the browser and executes them there.
 
 `node run.js` writes `run49-replay.json` with the full per-record output if you want to inspect a single article end to end.
 
 ## Reading a workflow without n8n
 
-Each file is a standard n8n export: `nodes` carries the steps, `connections` the wiring. The logic lives in `parameters.jsCode` on the Code nodes and in `parameters.*` on the HTTP and LLM nodes. To run one, import the JSON into any n8n instance and attach your own credentials.
+Start with the README in the folder. If you want the export itself, `workflow.json` is standard n8n: `nodes` carries the steps, `connections` the wiring. The logic lives in `parameters.jsCode` on the Code nodes and in `parameters.*` on the HTTP and LLM nodes. To run one, import the JSON into any n8n instance and attach your own credentials.
 
 ## Notes on this code
 
@@ -52,7 +54,7 @@ Each file is a standard n8n export: `nodes` carries the steps, `connections` the
 
 ## Method
 
-How I evaluate these — answer keys written before the run, adversarial cases, the four metrics, and a tuning change I reverted — is written up at [devinhuber.com/evaluation](https://devinhuber.com/evaluation/).
+How I evaluate these — answer keys written before the run, adversarial cases, the four metrics, and a tuning change I reverted — is written up at [devinhuber.com/reliability](https://devinhuber.com/reliability/).
 
 ## License
 
