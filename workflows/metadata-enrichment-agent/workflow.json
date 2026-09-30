@@ -295,6 +295,19 @@
         1616,
         528
       ]
+    },
+    {
+      "id": "b8c2fc28-b18b-4fcb-9ba8-2eac812fa8dc",
+      "name": "Harness Export",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        96
+      ],
+      "parameters": {
+        "jsCode": "// One compact record per article in the eval harness's shape, for exporting a run.\n// Layer 3's items carry the article body and the whole vocabulary, which makes a run slow\n// to pull. This node carries only what the harness scores: the route, which rung of the\n// routing ladder decided it, each facet's values with confidence (applied and rejected),\n// and the answer key. Same translation as the harness repo's\n// examples/metadata-enrichment/adapter.js.\nconst FACETS = { SUBJECT: 'subjects', INDUSTRY: 'industries', GEOGRAPHY: 'geographies', COMPANY: 'entities' };\n\n// Layer 3's routing ladder, identified by the start of each decision_reason. If a reason\n// is reworded, this stops the run loudly rather than misfiling records.\nconst BRANCHES = [\n  ['model-failed', /^Enrichment layer unavailable/],\n  ['duplicate', /^Near-duplicate of/],\n  ['hard-rejection', /^Guard rejected/],\n  ['empty-required', /^Required facet\\(s\\) returned no code/],\n  ['completeness', /^Record looks under-tagged/],\n  ['salience', /^Record looks over-tagged/],\n  ['gate', /^Lead tag confidence below the per-facet auto-publish threshold/],\n  ['auto', /^All tags in vocabulary/],\n];\n\nreturn $input.all().map(({ json: r }) => {\n  const branch = BRANCHES.find(([, re]) => re.test(r.decision_reason));\n  if (!branch) throw new Error(r.article_id + ': unrecognised decision_reason \"' + String(r.decision_reason).slice(0, 60) + '\"');\n  const output = {};\n  for (const [facet, key] of Object.entries(FACETS)) {\n    const applied = (r.applied[key] || []).map(t => {\n      const v = { value: facet === 'COMPANY' ? t.entity_id : t.code, confidence: t.confidence };\n      if (t.inherited_from) v.inherited_from = t.inherited_from;\n      return v;\n    });\n    const appliedCodes = new Set(applied.map(v => v.value));\n    // A code the guard rejected as the model's own proposal can still be applied as a\n    // narrower code's broader term; the applied copy is what reached the index.\n    const rejected = new Map();\n    for (const x of r.guard.rejections) {\n      if (x.facet !== facet || appliedCodes.has(x.code) || rejected.has(x.code)) continue;\n      rejected.set(x.code, { value: x.code, confidence: typeof x.confidence === 'number' ? x.confidence : null, applied: false });\n    }\n    output[facet] = [...applied, ...rejected.values()];\n  }\n  return { json: {\n    id: r.article_id,\n    decision: r.decision,\n    decision_branch: branch[0],\n    scored: r.llm_status === 'ok',\n    trap: r.trap,\n    output,\n    expected: r.truth_codes,\n  } };\n});"
+      }
     }
   ],
   "connections": {
@@ -358,6 +371,11 @@
         [
           {
             "node": "Operations Scorecard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Harness Export",
             "type": "main",
             "index": 0
           }

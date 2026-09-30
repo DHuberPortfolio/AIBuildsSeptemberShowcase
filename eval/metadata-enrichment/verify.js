@@ -3,7 +3,7 @@ const { replay, read } = require('./run.js');
 const out = replay(JSON.parse(read('vocab.json')), JSON.parse(read('run49-layer2.json')));
 const s = out.scorecard;
 
-// Figures as reported by n8n execution 49 (workflow 5GPLuV1sd8DfQTes).
+// Figures as reported by n8n execution 49 of the metadata enrichment workflow.
 const EXPECT = {
   'records_ingested': [s.records_ingested, 24],
   'records_enriched_and_scored': [s.records_enriched_and_scored, 22],

@@ -10,7 +10,7 @@ So the agent has three jobs: label accurately, prove where every label came from
 
 ## How it is wired
 
-16 nodes. The ones that matter:
+17 nodes. The ones that matter:
 
 | Node | Type | What it does |
 |---|---|---|
@@ -22,6 +22,12 @@ So the agent has three jobs: label accurately, prove where every label came from
 | `Operations Scorecard` | Code | Scores the run against an answer key: precision, recall, F1 and exact-set match per facet, plus routing, gate precision and unit cost. |
 | `Write Run Brief` | HTTP → Anthropic | Interprets the scorecard in prose. It may only cite figures already on the scorecard — it never produces its own. |
 | `Export Brief as .doc` | Convert to File | Ships the brief as a document. If the brief call fails, the export still ships without it. |
+| `Harness Export` | Code | A side branch after the guard. Emits one compact record per article for the [evaluation harness](https://github.com/DHuberPortfolio/workflow-eval-harness): the route, which rung of the routing ladder decided it, each facet’s codes with their confidence (applied and rejected), and the answer key. It changes nothing the workflow publishes. |
+
+## What changed
+
+- **Harness Export node.** The guard’s own output carries the article body and the whole vocabulary on every record, which made a run slow to pull for scoring. The new node emits only what the evaluation harness scores, about 15 KB for a 24-article run. The routing itself is unchanged.
+- The pipeline was then scored on a 500-article answer key in a separate [Golden 500 test copy](../metadata-enrichment-agent-golden-500/), where the fixes that measurement called for were made. This workflow is unchanged apart from the new node.
 
 ## What happens when it is wrong
 
@@ -41,6 +47,7 @@ So the agent has three jobs: label accurately, prove where every label came from
 - On the run reproduced in `../../eval/metadata-enrichment/`: 97 codes proposed, 84 accepted, 13 rejected.
 - 7 of 24 records filed with no human, 15 held for review, 2 suppressed as duplicates.
 - Zero of the auto-published records carried a tag error. $13.82 per 1,000 articles, measured — including the duplicates the run paid to enrich before suppressing them.
+- On the 500-article answer key in the [Golden 500 test copy](../metadata-enrichment-agent-golden-500/), the same pipeline’s silent error rate was 27.0% (54 of 200 auto-published articles carried a tag error). The 24-article set had not been representative.
 
 ## Running it
 
@@ -50,7 +57,7 @@ No credentials are included in the export. Attach your own.
 
 ## Known limits
 
-- The answer key is 24 articles. Gate precision will fall on real volume, and a 0% silent-error rate on 7 auto-published records is far too small a base to generalise.
+- The built-in answer key is 24 articles, and a 0% silent-error rate on 7 auto-published records was far too small a base to generalise: on 500 articles the rate was 27%. The fixes for that (prompt rules for regulation and litigation subjects, and a guard rung for tags the floor set aside) are in the Golden 500 test copy, not in this workflow.
 - The company authority file holds 15 records; production would need the full list.
 - Subject recall (73.2%) trails the other facets. The review queue is currently covering that gap rather than the model.
 

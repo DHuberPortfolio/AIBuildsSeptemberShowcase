@@ -1,0 +1,330 @@
+{
+  "name": "Bar Compliance Content Reviewer - Golden 500",
+  "description": "Test copy of the Bar-Compliance Content Reviewer. It scores the same pipeline against a 500-document answer key held in the Golden 500 data table. The demo workflow is unchanged.",
+  "active": false,
+  "nodes": [
+    {
+      "id": "054dd4b8-cba2-456f-b52e-7446f66423ff",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -432,
+        304
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "60e8a5cc-3373-4f9c-b062-e3c91c265531",
+      "name": "Load Golden 500",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -192,
+        304
+      ],
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "5CwAbXHau2EcQVjg"
+        },
+        "operation": "get",
+        "returnAll": true
+      }
+    },
+    {
+      "id": "89ea2cce-63da-4112-8488-336abb2af46d",
+      "name": "Load Clients and Eval Set",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        304
+      ],
+      "parameters": {
+        "jsCode": "// Golden 500 (2026-09-24). The eval set is read from the data table\n// \"Golden 500: Compliance Reviewer\" instead of being hardcoded. E01-E40 are the original\n// set with the v2 key additions already folded in; G001-G460 were added for this key.\n// FL_PREFILING_REVIEW is kept in expected_notes, not expected_violations: it is an advisory\n// rule, so it can never gate, and counting it as a violation would score every Florida\n// results ad as a silent error.\nconst CLIENT_REGISTRY = {\n  \"C-OH-PI-01\": { state: \"OH\", practice_area: \"personal_injury\", auto_pass_threshold: 0.80 },\n  \"C-FL-PI-02\": { state: \"FL\", practice_area: \"personal_injury\", auto_pass_threshold: 0.90 },\n  \"C-TX-CD-03\": { state: \"TX\", practice_area: \"criminal_defense\", auto_pass_threshold: 0.80 },\n  \"C-NY-EM-04\": { state: \"NY\", practice_area: \"employment\", auto_pass_threshold: 0.90 },\n  \"C-OH-FA-05\": { state: \"OH\", practice_area: \"family\", auto_pass_threshold: 0.80 },\n  \"C-CA-IM-06\": { state: \"CA\", practice_area: \"immigration\", auto_pass_threshold: 0.85 },\n  \"C-NY-ES-07\": { state: \"NY\", practice_area: \"estate_planning\", auto_pass_threshold: 0.90 },\n  \"C-FL-BK-08\": { state: \"FL\", practice_area: \"bankruptcy\", auto_pass_threshold: 0.90 },\n  \"C-CA-EM-14\": { state: \"CA\", practice_area: \"employment\", auto_pass_threshold: 0.85 },\n  \"C-CA-ES-22\": { state: \"CA\", practice_area: \"estate_planning\", auto_pass_threshold: 0.85 },\n};\n\nconst rows = $input.all().map(i => i.json);\n\n// Key integrity. Each row's fingerprint was recorded when this key was frozen (2026-09-24).\n// If a row in the data table has been edited, added or removed since, the run stops here\n// rather than scoring against a key nobody signed off. To accept a deliberate key change,\n// update KEY_HASHES (and date the change in the row's key_version).\nconst KEY_HASHES = {\"E01\":\"a95e5c1b\",\"E02\":\"d5639fcf\",\"E03\":\"469a0090\",\"E04\":\"f15ed029\",\"E05\":\"7c7a5864\",\"E06\":\"7d0c2bc1\",\"E07\":\"e31fa2b4\",\"E08\":\"da07cade\",\"E09\":\"98cc0931\",\"E10\":\"d779ba48\",\"E11\":\"a7ac9496\",\"E12\":\"fb76f34f\",\"E13\":\"6ab04b51\",\"E14\":\"5642ed1d\",\"E15\":\"ad3b62c6\",\"E16\":\"e419bcb5\",\"E17\":\"4b23822a\",\"E18\":\"78f594c1\",\"E19\":\"5f22d660\",\"E20\":\"abd7034b\",\"E21\":\"2c929e15\",\"E22\":\"1accb22e\",\"E23\":\"63a98d57\",\"E24\":\"74d03f9a\",\"E25\":\"413b988b\",\"E26\":\"8b94e8b5\",\"E27\":\"d6e0ba3b\",\"E28\":\"5c1c64b1\",\"E29\":\"55ddce79\",\"E30\":\"bd624c94\",\"E31\":\"ac9291b0\",\"E32\":\"9bc4fb64\",\"E33\":\"b5318c63\",\"E34\":\"041c9200\",\"E35\":\"57aeb3d5\",\"E36\":\"e01a187c\",\"E37\":\"f87757b1\",\"E38\":\"a7fc114a\",\"E39\":\"60337a3c\",\"E40\":\"58d8fa00\",\"G001\":\"de21ea6f\",\"G002\":\"1c860986\",\"G003\":\"ddda0086\",\"G004\":\"567c9991\",\"G005\":\"14693061\",\"G006\":\"0dead9af\",\"G007\":\"62f3e954\",\"G008\":\"e4e1a52d\",\"G009\":\"3798ef21\",\"G010\":\"2c4ec68b\",\"G011\":\"48d07342\",\"G012\":\"49efc1cf\",\"G013\":\"7ac72dfd\",\"G014\":\"72fc10dd\",\"G015\":\"f5afdff9\",\"G016\":\"175d36b4\",\"G017\":\"564ecf49\",\"G018\":\"0765d58b\",\"G019\":\"c24bc582\",\"G020\":\"4b022ea7\",\"G021\":\"d139cd26\",\"G022\":\"45e4a28e\",\"G023\":\"b7c9d08a\",\"G024\":\"d3242804\",\"G025\":\"0ef1e4e4\",\"G026\":\"4f48d492\",\"G027\":\"6764899b\",\"G028\":\"03f830c6\",\"G029\":\"cc0b0455\",\"G030\":\"91b96a7a\",\"G031\":\"79b7f442\",\"G032\":\"b1d3918f\",\"G033\":\"b3ceb275\",\"G034\":\"97e7094b\",\"G035\":\"2a02929c\",\"G036\":\"360c2ddc\",\"G037\":\"59b19be6\",\"G038\":\"36820066\",\"G039\":\"75056d54\",\"G040\":\"7a9b1b7d\",\"G041\":\"d58d6cd5\",\"G042\":\"ea3d7bce\",\"G043\":\"0777c8ec\",\"G044\":\"26e3d73d\",\"G045\":\"4a7120a2\",\"G046\":\"17f7ebdd\",\"G047\":\"148398c8\",\"G048\":\"3cc805f1\",\"G049\":\"15cac11c\",\"G050\":\"3ac4e957\",\"G051\":\"8c9c407d\",\"G052\":\"abd41016\",\"G053\":\"0fc6cdc7\",\"G054\":\"a36b1c05\",\"G055\":\"c58922d1\",\"G056\":\"0badd4a4\",\"G057\":\"d15342b5\",\"G058\":\"8bb573a0\",\"G059\":\"94ac8546\",\"G060\":\"2e43cd5a\",\"G061\":\"3018ca6c\",\"G062\":\"27a44938\",\"G063\":\"47c8e7b6\",\"G064\":\"1bd3595b\",\"G065\":\"6422af8b\",\"G066\":\"30a03255\",\"G067\":\"4f785ffe\",\"G068\":\"6011870c\",\"G069\":\"e99be7a1\",\"G070\":\"897093b0\",\"G071\":\"99291b2c\",\"G072\":\"9a09c4a2\",\"G073\":\"d0a93984\",\"G074\":\"7787f453\",\"G075\":\"15e031f5\",\"G076\":\"0c2a4d81\",\"G077\":\"c5035702\",\"G078\":\"791a462b\",\"G079\":\"8635d441\",\"G080\":\"9dd56316\",\"G081\":\"db430576\",\"G082\":\"94f02323\",\"G083\":\"ccd87c7b\",\"G084\":\"665efe19\",\"G085\":\"6a5e4015\",\"G086\":\"b5701091\",\"G087\":\"6f0de2c9\",\"G088\":\"f80e6ec7\",\"G089\":\"5e4b5bd2\",\"G090\":\"37c2bda6\",\"G091\":\"70e7df45\",\"G092\":\"243baaca\",\"G093\":\"6084e415\",\"G094\":\"893aee62\",\"G095\":\"dc691626\",\"G096\":\"bc33d6d2\",\"G097\":\"1a085dc3\",\"G098\":\"87b7df43\",\"G099\":\"0ec14377\",\"G100\":\"f0d098c7\",\"G101\":\"fcc83e88\",\"G102\":\"51b410a2\",\"G103\":\"3bc1cec2\",\"G104\":\"4b972f66\",\"G105\":\"0a3819ef\",\"G106\":\"bb1cf193\",\"G107\":\"3ad187a6\",\"G108\":\"3f59a7ef\",\"G109\":\"e14de5cb\",\"G110\":\"23927fa4\",\"G111\":\"983b6626\",\"G112\":\"fa60fe91\",\"G113\":\"e41e4032\",\"G114\":\"46236a8b\",\"G115\":\"5ab63e01\",\"G116\":\"34bb9650\",\"G117\":\"d3f66945\",\"G118\":\"70d5288e\",\"G119\":\"b84f972a\",\"G120\":\"6a04444b\",\"G121\":\"ea0bc2f1\",\"G122\":\"30648193\",\"G123\":\"18468d29\",\"G124\":\"730f1e5f\",\"G125\":\"80a80369\",\"G126\":\"336acb99\",\"G127\":\"b03ca8e4\",\"G128\":\"7ffd1666\",\"G129\":\"4ab7073e\",\"G130\":\"d312fa56\",\"G131\":\"4e306854\",\"G132\":\"ecdf7793\",\"G133\":\"9f30a81f\",\"G134\":\"357ed461\",\"G135\":\"8761962d\",\"G136\":\"7de75600\",\"G137\":\"643d11f4\",\"G138\":\"60d708cd\",\"G139\":\"6b27e74b\",\"G140\":\"f0c77e88\",\"G141\":\"a8f78c99\",\"G142\":\"b86f7400\",\"G143\":\"edd5a736\",\"G144\":\"385a25fe\",\"G145\":\"c0146f1b\",\"G146\":\"abd82786\",\"G147\":\"c5234987\",\"G148\":\"d06b5e8c\",\"G149\":\"644d4724\",\"G150\":\"ad28d6ee\",\"G151\":\"86acba87\",\"G152\":\"07067c9b\",\"G153\":\"6b56b4dc\",\"G154\":\"fcd92a5f\",\"G155\":\"6af9a424\",\"G156\":\"90c91c76\",\"G157\":\"93a64304\",\"G158\":\"2c2e7bdc\",\"G159\":\"7ba85c82\",\"G160\":\"2398820a\",\"G161\":\"bc981940\",\"G162\":\"42ed881a\",\"G163\":\"c21ee453\",\"G164\":\"979e789a\",\"G165\":\"8d00e921\",\"G166\":\"130dbee7\",\"G167\":\"ebddbc7d\",\"G168\":\"bdf1f040\",\"G169\":\"ae4094cc\",\"G170\":\"faa3d648\",\"G171\":\"bce504a6\",\"G172\":\"702c1a0e\",\"G173\":\"f4920afb\",\"G174\":\"d214284a\",\"G175\":\"ca24a1b2\",\"G176\":\"d148b407\",\"G177\":\"b49a3655\",\"G178\":\"1843c037\",\"G179\":\"2d7017f6\",\"G180\":\"569e5692\",\"G181\":\"6f52b797\",\"G182\":\"0fe9ceca\",\"G183\":\"4e126a5c\",\"G184\":\"71c47e83\",\"G185\":\"436c8b6c\",\"G186\":\"34ef4164\",\"G187\":\"03968682\",\"G188\":\"49fd2370\",\"G189\":\"740fa51a\",\"G190\":\"de0768d0\",\"G191\":\"2e7730e1\",\"G192\":\"1bcf6345\",\"G193\":\"817ecd91\",\"G194\":\"adc54c79\",\"G195\":\"09080e51\",\"G196\":\"6d123157\",\"G197\":\"817742f1\",\"G198\":\"fbf07ef4\",\"G199\":\"15df5e78\",\"G200\":\"6d0570bf\",\"G201\":\"86b912ed\",\"G202\":\"f9f0c69e\",\"G203\":\"f20951c6\",\"G204\":\"6242fd79\",\"G205\":\"1c1a4269\",\"G206\":\"ecf7e083\",\"G207\":\"2299d7ea\",\"G208\":\"560058f9\",\"G209\":\"4aafa6de\",\"G210\":\"29a40a0b\",\"G211\":\"05d9f8b5\",\"G212\":\"71efe9ff\",\"G213\":\"0e958af9\",\"G214\":\"f389e436\",\"G215\":\"d0328e7c\",\"G216\":\"f3b7d3d5\",\"G217\":\"ca37a812\",\"G218\":\"78695515\",\"G219\":\"3bfa7049\",\"G220\":\"99a3d4d0\",\"G221\":\"ce42aa34\",\"G222\":\"d82f850c\",\"G223\":\"51381f43\",\"G224\":\"d7d63e48\",\"G225\":\"59386bc0\",\"G226\":\"fccbde1e\",\"G227\":\"1a362957\",\"G228\":\"45b88c65\",\"G229\":\"b61a2fb5\",\"G230\":\"b140708d\",\"G231\":\"9c7fa681\",\"G232\":\"40080d57\",\"G233\":\"366d9918\",\"G234\":\"948cbf60\",\"G235\":\"054b61a3\",\"G236\":\"7616c94f\",\"G237\":\"9d5e7189\",\"G238\":\"937c1b35\",\"G239\":\"f5318ea0\",\"G240\":\"76f92260\",\"G241\":\"a107dfb6\",\"G242\":\"28e7dea0\",\"G243\":\"f98df06a\",\"G244\":\"a0902774\",\"G245\":\"0a19dfdb\",\"G246\":\"8907ff35\",\"G247\":\"a6d4d75e\",\"G248\":\"db020783\",\"G249\":\"6214b05a\",\"G250\":\"cc8441a6\",\"G251\":\"34b7ad8c\",\"G252\":\"dd43cd4d\",\"G253\":\"10122ffd\",\"G254\":\"0d90b53d\",\"G255\":\"92c8eac8\",\"G256\":\"81b8a11a\",\"G257\":\"93f7b9a8\",\"G258\":\"96ac5b0c\",\"G259\":\"a5c25210\",\"G260\":\"343b423a\",\"G261\":\"31060551\",\"G262\":\"e046fd96\",\"G263\":\"be9c61b0\",\"G264\":\"73f2402f\",\"G265\":\"01f3f862\",\"G266\":\"5572ef90\",\"G267\":\"b25e11b4\",\"G268\":\"125b11b1\",\"G269\":\"07d15670\",\"G270\":\"4f2b1ea0\",\"G271\":\"46a97031\",\"G272\":\"af10b208\",\"G273\":\"6eadd925\",\"G274\":\"0b7ffde6\",\"G275\":\"ed6b8826\",\"G276\":\"56388b02\",\"G277\":\"1a4e8b84\",\"G278\":\"e2cbbfff\",\"G279\":\"2f0c920e\",\"G280\":\"c656f1c5\",\"G281\":\"6d07eaaa\",\"G282\":\"5c10100e\",\"G283\":\"fbd60700\",\"G284\":\"c8415d10\",\"G285\":\"92b2ade6\",\"G286\":\"85387064\",\"G287\":\"9e2d9302\",\"G288\":\"ebf1e8af\",\"G289\":\"5389ecc2\",\"G290\":\"05709639\",\"G291\":\"35c4f8cc\",\"G292\":\"e1e561f9\",\"G293\":\"d298f463\",\"G294\":\"bc24b290\",\"G295\":\"bc18c060\",\"G296\":\"af96ab1d\",\"G297\":\"326730ef\",\"G298\":\"867e1c95\",\"G299\":\"c1d3cd3d\",\"G300\":\"66fec58f\",\"G301\":\"58455e3a\",\"G302\":\"0afa3ae4\",\"G303\":\"1a49665f\",\"G304\":\"9006a2fb\",\"G305\":\"3eba89b1\",\"G306\":\"a45003cb\",\"G307\":\"bdaecbf6\",\"G308\":\"c939f0e7\",\"G309\":\"49e2c225\",\"G310\":\"2b60758d\",\"G311\":\"c257bfb9\",\"G312\":\"80270216\",\"G313\":\"f9ac3180\",\"G314\":\"47c35249\",\"G315\":\"62796ae8\",\"G316\":\"a56c766c\",\"G317\":\"cf4c0b9b\",\"G318\":\"7e20af0d\",\"G319\":\"c96dd4b1\",\"G320\":\"a95b698c\",\"G321\":\"88547c61\",\"G322\":\"07f4fc55\",\"G323\":\"7e3e11f2\",\"G324\":\"a1e489ce\",\"G325\":\"c974e49b\",\"G326\":\"74c3ec80\",\"G327\":\"e5bdcd52\",\"G328\":\"4787e28a\",\"G329\":\"0d1dabde\",\"G330\":\"4719b919\",\"G331\":\"eb7fa3e2\",\"G332\":\"85add093\",\"G333\":\"ef315adf\",\"G334\":\"74afa214\",\"G335\":\"6be7df24\",\"G336\":\"79214f7f\",\"G337\":\"72453caa\",\"G338\":\"e61c3b7e\",\"G339\":\"afe1462e\",\"G340\":\"c0486ab0\",\"G341\":\"bc8cf9a3\",\"G342\":\"5891db55\",\"G343\":\"6f7ddbc6\",\"G344\":\"fe557c8d\",\"G345\":\"7636d973\",\"G346\":\"9cd28a4b\",\"G347\":\"d77de905\",\"G348\":\"6f3d0370\",\"G349\":\"05943e69\",\"G350\":\"174de80c\",\"G351\":\"bae1627f\",\"G352\":\"4279fff3\",\"G353\":\"010b6102\",\"G354\":\"0a3def69\",\"G355\":\"40e86c09\",\"G356\":\"2346b3ff\",\"G357\":\"ed791319\",\"G358\":\"f4ff4ffd\",\"G359\":\"90550b8b\",\"G360\":\"4fea07b8\",\"G361\":\"c97071c1\",\"G362\":\"a554c94d\",\"G363\":\"63e2bad1\",\"G364\":\"0f8c02fc\",\"G365\":\"8bbddea0\",\"G366\":\"261f027d\",\"G367\":\"fdf4dd40\",\"G368\":\"dab386c2\",\"G369\":\"8d4f5eb7\",\"G370\":\"293cce05\",\"G371\":\"a6a65fb4\",\"G372\":\"b6e7055b\",\"G373\":\"cfafd837\",\"G374\":\"5520a977\",\"G375\":\"a6279ab1\",\"G376\":\"418a431d\",\"G377\":\"223b456f\",\"G378\":\"68389c1b\",\"G379\":\"d8dc7493\",\"G380\":\"e68d59be\",\"G381\":\"9dbed226\",\"G382\":\"d251558b\",\"G383\":\"b01fef4f\",\"G384\":\"c4b40360\",\"G385\":\"e5e722fe\",\"G386\":\"08669e57\",\"G387\":\"2a1ac10d\",\"G388\":\"fcaa9dac\",\"G389\":\"3ff4f7f8\",\"G390\":\"d8ca7b50\",\"G391\":\"c9451710\",\"G392\":\"6f741003\",\"G393\":\"0fea5ff1\",\"G394\":\"952b7171\",\"G395\":\"8d248cd5\",\"G396\":\"0b58811e\",\"G397\":\"b2f7e7b7\",\"G398\":\"5fc4c82b\",\"G399\":\"68a23b24\",\"G400\":\"af335634\",\"G401\":\"198fc71c\",\"G402\":\"ec4a53b9\",\"G403\":\"d441b268\",\"G404\":\"0b91a961\",\"G405\":\"8c038900\",\"G406\":\"e2811a27\",\"G407\":\"ffcab36e\",\"G408\":\"167e6684\",\"G409\":\"4e54e5f2\",\"G410\":\"ac0d2396\",\"G411\":\"276da0af\",\"G412\":\"7a7211b1\",\"G413\":\"8ece196b\",\"G414\":\"17eb6d96\",\"G415\":\"ccaedc0f\",\"G416\":\"ac39a908\",\"G417\":\"96c9f4de\",\"G418\":\"6f2402df\",\"G419\":\"24684619\",\"G420\":\"4dbe2aa1\",\"G421\":\"ea8d2ea7\",\"G422\":\"ec1d3496\",\"G423\":\"db141003\",\"G424\":\"5d25b6f5\",\"G425\":\"172be016\",\"G426\":\"0465204c\",\"G427\":\"3491ac03\",\"G428\":\"f78c2a64\",\"G429\":\"92dbc973\",\"G430\":\"c7be1f55\",\"G431\":\"a55b84c0\",\"G432\":\"39cca6fc\",\"G433\":\"6b0a4d1b\",\"G434\":\"42931dfa\",\"G435\":\"71fb685d\",\"G436\":\"b3d02db7\",\"G437\":\"a4bffc7d\",\"G438\":\"dc6dabee\",\"G439\":\"c4e2987a\",\"G440\":\"f42b3ef6\",\"G441\":\"93382025\",\"G442\":\"c76de742\",\"G443\":\"9bf7771d\",\"G444\":\"7deb4b16\",\"G445\":\"67933dde\",\"G446\":\"1004d752\",\"G447\":\"fa4f756e\",\"G448\":\"0511d23e\",\"G449\":\"3ed2bc67\",\"G450\":\"fe9ebd13\",\"G451\":\"cd6e1503\",\"G452\":\"75e72dfd\",\"G453\":\"cec15f5c\",\"G454\":\"5a4fd287\",\"G455\":\"9fd8ab8d\",\"G456\":\"5d621312\",\"G457\":\"9b68df8e\",\"G458\":\"2a8cf8fd\",\"G459\":\"12613f64\",\"G460\":\"ab3dd170\"};\nconst KEY_FIELDS = [\"item_id\",\"client_id\",\"content\",\"expected_violations\",\"expected_notes\",\"detectable_by\",\"label_confidence\",\"trap\",\"key_version\"];\nfunction fnv(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); }\nconst norm = v => v === null || v === undefined ? '' : String(v);\nconst seenIds = new Set();\nconst changed = [], added = [];\nfor (const r of rows) {\n  const id = norm(r.item_id);\n  seenIds.add(id);\n  const h = fnv(KEY_FIELDS.map(f => norm(r[f])).join('\\u0001'));\n  if (!(id in KEY_HASHES)) added.push(id); else if (KEY_HASHES[id] !== h) changed.push(id);\n}\nconst missing = Object.keys(KEY_HASHES).filter(id => !seenIds.has(id));\nif (changed.length || added.length || missing.length) {\n  throw new Error('Golden key changed since it was frozen. changed: [' + changed.join(', ') + '] added: [' + added.join(', ') + '] missing: [' + missing.join(', ') + ']');\n}\n\nconst split = s => norm(s).split(',').map(x => x.trim()).filter(Boolean);\n\nconst order = id => (id[0] === 'E' ? 0 : 1000) + Number(id.slice(1));\nrows.sort((a, b) => order(a.item_id) - order(b.item_id));\n\nreturn rows.map(row => {\n  const cfg = CLIENT_REGISTRY[row.client_id];\n  if (!cfg) throw new Error('Unknown client_id: ' + row.client_id + ' on ' + row.item_id);\n  const expected_violations = split(row.expected_violations);\n  return {\n    json: {\n      id: row.item_id,\n      content: row.content,\n      client_id: row.client_id,\n      state: cfg.state,\n      practice_area: cfg.practice_area,\n      auto_pass_threshold: cfg.auto_pass_threshold,\n      expected_violations,\n      expected_notes: split(row.expected_notes),\n      expected_flag: expected_violations.length > 0,\n      detectable_by: row.detectable_by,\n      label_confidence: row.label_confidence,\n      key_version: row.key_version,\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "cf5ee8fe-8a81-4f21-ae33-d62d7225c9f5",
+      "name": "Layer 1 Deterministic Scan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        544
+      ],
+      "parameters": {
+        "jsCode": "const DISCLAIMER_PATTERNS = [\n  /prior results do not guarantee[^.]*\\./gi,\n  /past results (do not|don't) guarantee[^.]*\\./gi,\n  /testimonials do not constitute[^.]*\\./gi,\n  /results (may )?var(y|ies)[^.]*\\./gi,\n  /every case is different[^.]*\\./gi,\n  /no (representation|guarantee) is made[^.]*\\./gi,\n];\n\nfunction stripDisclaimers(text) {\n  let stripped = text;\n  const found = [];\n  for (const p of DISCLAIMER_PATTERNS) {\n    const m = stripped.match(p);\n    if (m) found.push(...m.map(s => s.trim()));\n    stripped = stripped.replace(p, ' ');\n  }\n  return { stripped, disclaimers: found };\n}\n\nconst BASE_RULES = [\n  {\n    code: 'SUPERLATIVE',\n    severity: 'blocking',\n    basis: 'ABA Model Rule 7.1 - unverifiable comparative claim',\n    patterns: [\n      /\\bbest\\b(?!\\s+(?:interests?|practices?))/i,\n      /#\\s?1\\b/,\n      /\\bnumber one\\b/i,\n      /\\btop[-\\s]rated\\b/i,\n      /\\bpremier\\b/i,\n      /\\b(finest|greatest)\\b/i,\n      /\\bmost successful\\b/i,\n      /\\bunmatched|unparalleled\\b/i,\n    ],\n  },\n  {\n    code: 'SPECIALIST',\n    severity: 'blocking',\n    basis: 'ABA Model Rule 7.4 - specialist claim without accredited certification',\n    patterns: [\n      /\\bspecial(?:ist|ists|ize|izes|izing|ization)\\b/i,\n      /(?<!\\b(?:witness|reconstruction|forensic|medical|vocational|economic)\\s)\\bexperts?\\b(?!\\s+(?:witness|witnesses|testimony|report))/i,\n    ],\n  },\n  {\n    code: 'GUARANTEE',\n    severity: 'blocking',\n    basis: 'ABA Model Rule 7.1 - guarantee or prediction of outcome',\n    patterns: [\n      /\\bguarantee[sd]?\\b/i,\n      /\\bwe will win\\b/i,\n      /\\bwe (?:do not|don't|never) lose\\b/i,\n      /\\bpromise\\b/i,\n    ],\n  },\n];\n\nconst CONDITIONAL_RULES = [\n  {\n    code: 'RESULTS_NO_DISCLAIMER',\n    severity: 'review',\n    basis: 'Most jurisdictions require a results disclaimer alongside verdict or settlement figures',\n    test: (s, ctx) => (/\\$[\\d,]+(?:\\.\\d+)?\\s*(?:million|billion|m\\b|k\\b)?/i.test(s)\n      || /\\b(?:millions|billions)\\b/i.test(s)) && ctx.disclaimers.length === 0,\n  },\n  {\n    code: 'TESTIMONIAL_NO_DISCLAIMER',\n    severity: 'review',\n    basis: 'Client testimonial presented without required disclaimer',\n    test: (s, ctx) => /[\"“][^\"”]{15,}[\"”]\\s*[-–—]\\s*\\S/.test(s) && ctx.disclaimers.length === 0,\n  },\n  {\n    code: 'SPECIALIST_CERT_UNNAMED',\n    severity: 'blocking',\n    basis: 'Certification claimed without naming the certifying organization',\n    test: (s) => /\\bboard[-\\s]certified\\b/i.test(s) && !/certified by\\s+the\\s+\\S+/i.test(s),\n  },\n];\n\nconst STATE_RULES = {\n  NY: [{\n    code: 'MISSING_ATTY_AD_LABEL',\n    severity: 'blocking',\n    basis: \"NY Rule 7.1(f) - advertising must be labeled 'Attorney Advertising'\",\n    test: (s) => !/attorney advertising/i.test(s),\n  }],\n  FL: [{\n    code: 'FL_PREFILING_REVIEW',\n    severity: 'advisory',\n    basis: 'Florida Bar requires pre-publication review for many advertisement types',\n    test: (s) => /\\$[\\d,]+/.test(s) || /\\bverdict|settlement\\b/i.test(s),\n  }],\n};\n\nconst item = $input.item.json;\nconst { stripped, disclaimers } = stripDisclaimers(item.content);\nconst ctx = { disclaimers };\nconst hits = [];\n\nfor (const rule of BASE_RULES) {\n  for (const p of rule.patterns) {\n    const m = stripped.match(p);\n    if (m) {\n      hits.push({ code: rule.code, severity: rule.severity, basis: rule.basis,\n                  matched_text: m[0].trim(), layer: 'deterministic' });\n      break;\n    }\n  }\n}\n\nfor (const rule of [...CONDITIONAL_RULES, ...(STATE_RULES[item.state] || [])]) {\n  if (rule.test(stripped, ctx)) {\n    hits.push({ code: rule.code, severity: rule.severity, basis: rule.basis,\n                matched_text: null, layer: 'deterministic' });\n  }\n}\n\n// v2 prompt (eval harness, 2026-09-23): the codes match the answer key's names, and the\n// confidence scale is anchored. v1 told the model to \"be conservative\", and it hedged the\n// confidence of findings it did report: true implied violations came back at 0.55-0.85,\n// under the client thresholds (0.80-0.90), so they became notes instead of reviews.\n// Conservatism now applies to WHETHER to report, not to how confident a report is.\nconst llm_prompt = 'You are reviewing marketing copy for a law firm advertising in ' + item.state + ' (practice area: ' + item.practice_area + ').\\n\\n' +\n  'Your job is to find violations of attorney advertising rules that a keyword scanner CANNOT catch - claims that are problematic because of what they IMPLY, not because of any specific banned word.\\n\\n' +\n  'Look for:\\n' +\n  '- IMPLIED_GUARANTEE: language creating an unjustified expectation of a particular outcome, without using the word \"guarantee\"\\n' +\n  '- IMPLIED_SUPERIORITY: claims of being better than other firms, without using a superlative\\n' +\n  '- UNVERIFIABLE_COMPARISON: comparisons to other lawyers that cannot be factually substantiated\\n' +\n  '- STATISTIC_NO_CONTEXT: success rates or percentages presented without the context needed to interpret them\\n' +\n  '- AWARD_CLAIM_REVIEW: awards, rankings, or list placements that may require naming the granting organization and its selection methodology\\n' +\n  '- TESTIMONIAL_NO_DISCLAIMER: client testimonials presented without a disclaimer, or implying typical results\\n' +\n  '- RESULTS_NO_DISCLAIMER: described outcomes (even non-monetary) presented without a results disclaimer\\n\\n' +\n  'Do NOT report simple banned keywords such as \"best\", \"#1\", \"specialist\", \"expert\", or \"guarantee\" - a separate deterministic layer already handles those. Report only implied or contextual problems.\\n\\n' +\n  'Report a finding only if a bar compliance reviewer would ask for the copy to be changed. A false positive trains the content team to ignore this system, so if copy is factual, verifiable, and makes no outcome promise, return an empty findings array.\\n\\n' +\n  'Do not hedge the confidence of a finding you do report. The confidence decides whether a person must review the copy before it is published: understating it lets a real violation go live with only a note.\\n\\n' +\n  'COPY TO REVIEW:\\n\"\"\"\\n' + item.content + '\\n\"\"\"\\n\\n' +\n  'Respond with ONLY valid JSON, no preamble or code fences, in exactly this shape:\\n' +\n  '{\"findings\": [{\"code\": \"IMPLIED_GUARANTEE\", \"quote\": \"the exact span of text at issue\", \"reasoning\": \"one sentence on why this implies something the rules prohibit\", \"confidence\": 0.0}]}\\n' +\n  'Set confidence to your probability that a bar compliance reviewer would agree this is a violation, using these anchors:\\n' +\n  '- 0.90 to 1.00: the copy plainly promises or strongly implies an outcome, superiority, or result without the required context; most reviewers would flag it on sight\\n' +\n  '- 0.70 to 0.89: a reasonable reviewer would probably flag it, but it depends on the wording or context\\n' +\n  '- 0.50 to 0.69: arguable; some reviewers would flag it, many would not\\n' +\n  '- below 0.50: do not report it';\n\nreturn {\n  json: {\n    ...item,\n    deterministic_hits: hits,\n    disclaimers_found: disclaimers,\n    llm_prompt,\n  },\n};\n",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "89bed608-8a34-4bc1-a7b9-7ff7afef5976",
+      "name": "Layer 2 LLM Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        528,
+        304
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "jsonBody": "={{ JSON.stringify({ model: \"claude-sonnet-5\", max_tokens: 1200, messages: [ { role: \"user\", content: $json.llm_prompt } ] }) }}",
+        "method": "POST",
+        "nodeCredentialType": "anthropicApi",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchInterval": 1500,
+              "batchSize": 2
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "sendHeaders": true,
+        "specifyBody": "json",
+        "url": "https://api.anthropic.com/v1/messages"
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "f61e2690-7ac9-4a72-bd6f-718a2aab5d0d",
+      "name": "Merge and Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        544
+      ],
+      "parameters": {
+        "jsCode": "const src = $('Layer 1 Deterministic Scan').item.json;\nconst resp = $input.item.json;\n\nlet llm_findings = [];\nlet llm_status = 'ok';\nlet usage = { input_tokens: 0, output_tokens: 0 };\n\ntry {\n  if (resp.error) throw new Error(resp.error.message || 'api error');\n\n  // Models with adaptive thinking return content as an array of blocks, and a\n  // thinking block can come first. Find the text block by type; never assume [0].\n  const blocks = Array.isArray(resp.content) ? resp.content : [];\n  const textBlock = blocks.find(b => b && b.type === 'text');\n  const raw = textBlock && textBlock.text;\n  if (!raw) throw new Error('no text block in response (blocks: ' + blocks.map(b => b && b.type).join(',') + ')');\n\n  usage = resp.usage || usage;\n\n  const cleaned = raw.replace(/^\\s*```(?:json)?/i, '').replace(/```\\s*$/, '').trim();\n  const parsed = JSON.parse(cleaned);\n  llm_findings = Array.isArray(parsed.findings) ? parsed.findings : [];\n} catch (e) {\n  llm_status = 'error: ' + e.message;\n}\n\nconst threshold = src.auto_pass_threshold;\nconst gating_llm = llm_findings.filter(f => (f.confidence ?? 0) >= threshold);\nconst advisory_llm = llm_findings.filter(f => (f.confidence ?? 0) < threshold);\nconst blocking_det = src.deterministic_hits.filter(h => h.severity === 'blocking');\nconst review_det = src.deterministic_hits.filter(h => h.severity === 'review');\nconst advisory_det = src.deterministic_hits.filter(h => h.severity === 'advisory');\n\nlet decision;\nlet decision_reason;\n\nif (llm_status !== 'ok') {\n  decision = 'REVIEW_REQUIRED';\n  decision_reason = 'Layer 2 unavailable - failing safe to human review';\n} else if (blocking_det.length > 0) {\n  decision = 'BLOCK';\n  decision_reason = 'Deterministic blocking rule(s): ' + blocking_det.map(h => h.code).join(', ');\n} else if (review_det.length > 0 || gating_llm.length > 0) {\n  decision = 'REVIEW_REQUIRED';\n  decision_reason = [...review_det.map(h => h.code), ...gating_llm.map(f => f.code + ' (' + f.confidence + ')')].join(', ');\n} else if (advisory_det.length > 0 || advisory_llm.length > 0) {\n  decision = 'PASS_WITH_NOTES';\n  decision_reason = [...advisory_det.map(h => h.code), ...advisory_llm.map(f => f.code + ' (' + f.confidence + ', below ' + threshold + ')')].join(', ');\n} else {\n  decision = 'PASS';\n  decision_reason = 'No findings';\n}\n\nconst all_codes = [...src.deterministic_hits.map(h => h.code), ...gating_llm.map(f => f.code)];\nconst cost_usd = (usage.input_tokens / 1e6) * 2 + (usage.output_tokens / 1e6) * 10;\n\nreturn {\n  json: {\n    id: src.id,\n    client_id: src.client_id,\n    state: src.state,\n    content: src.content,\n    decision,\n    decision_reason,\n    flagged: decision !== 'PASS',\n    deterministic_hits: src.deterministic_hits,\n    llm_findings,\n    llm_status,\n    gating_codes: all_codes,\n    expected_violations: src.expected_violations,\n    expected_flag: src.expected_flag,\n    detectable_by: src.detectable_by,\n    input_tokens: usage.input_tokens,\n    output_tokens: usage.output_tokens,\n    cost_usd: Number(cost_usd.toFixed(6)),\n    reviewed_at: new Date().toISOString(),\n  },\n};",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "22d0993f-1275-44b6-bcc3-65e0c7a0c665",
+      "name": "Scorecard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        304
+      ],
+      "parameters": {
+        "jsCode": "// Scores this run against the answer key carried through the pipeline.\n//\n// Headline: the silent error rate. Of the documents that went out without review, the\n// share the answer key says needed a person. PASS_WITH_NOTES goes out without review (its\n// notes go to the Pass-with-Notes Log, which nobody reads before publishing), so a\n// violation that only got a note counts as MISSED here, not caught.\n// An earlier version counted a note as a catch and reported a 100% catch rate while\n// 22-30% of the copy that went out needed a person (eval harness, 2026-09-23).\nconst rows = $input.all().map(i => i.json);\n\n// A person sees these before anything is published. Everything else goes out without review.\nconst REVIEWED = ['BLOCK', 'REVIEW_REQUIRED'];\nconst isReviewed = r => REVIEWED.includes(r.decision);\n\nconst pct = (n, d) => d === 0 ? null : Number(((n / d) * 100).toFixed(1));\nconst excerpt = r => r.content.slice(0, 80);\n\nconst wentOut = rows.filter(r => !isReviewed(r));\nconst silentErrors = wentOut.filter(r => r.expected_flag);        // went out, but needed a person\nconst reviewed = rows.filter(isReviewed);\nconst violations = rows.filter(r => r.expected_flag);\nconst caught = violations.filter(isReviewed);                     // violations a person saw\nconst clean = rows.filter(r => !r.expected_flag);\nconst falseAlarms = clean.filter(isReviewed);                      // clean copy a person had to check\n\n// Which layer found each violation that reached a person.\nlet det_only = 0, llm_only = 0, both = 0;\nfor (const r of caught) {\n  const d = r.deterministic_hits.length > 0;\n  const l = (r.llm_findings || []).length > 0;\n  if (d && l) both++; else if (d) det_only++; else if (l) llm_only++;\n}\n\nconst total_cost = rows.reduce((s, r) => s + (r.cost_usd || 0), 0);\nconst total_in = rows.reduce((s, r) => s + (r.input_tokens || 0), 0);\nconst total_out = rows.reduce((s, r) => s + (r.output_tokens || 0), 0);\nconst errors = rows.filter(r => r.llm_status !== 'ok').length;\nconst byDecision = rows.reduce((acc, r) => { acc[r.decision] = (acc[r.decision] || 0) + 1; return acc; }, {});\n\nreturn [{\n  json: {\n    run_at: new Date().toISOString(),\n    documents_evaluated: rows.length,\n    headline: {\n      silent_error_rate_pct: pct(silentErrors.length, wentOut.length),\n      silent_errors: silentErrors.length,\n      went_out_without_review: wentOut.length,\n      note: 'Of the documents that went out without review (PASS and PASS_WITH_NOTES), the share the answer key says needed a person. Each one reached the public with nobody having looked.',\n    },\n    accuracy: {\n      catch_rate_pct: pct(caught.length, violations.length),\n      violations: violations.length,\n      caught_by_a_person: caught.length,\n      went_out_with_only_a_note: silentErrors.filter(r => r.decision === 'PASS_WITH_NOTES').length,\n      went_out_with_nothing: silentErrors.filter(r => r.decision === 'PASS').length,\n      false_alarm_rate_pct: pct(falseAlarms.length, clean.length),\n      false_alarms: falseAlarms.length,\n      clean_documents: clean.length,\n      review_precision_pct: pct(reviewed.length - falseAlarms.length, reviewed.length),\n      note: 'Catch rate: violations that reached a person, out of all violations. A note does not count: the copy still went out. False alarm rate: clean copy a person had to check. Review precision: reviews a person actually needed.',\n    },\n    layer_attribution: {\n      caught_by_deterministic_only: det_only,\n      caught_by_llm_only: llm_only,\n      caught_by_both: both,\n      note: 'Of the violations that reached a person, which layer found them. llm_only is what regex structurally could not find; if it is 0, the LLM layer is not earning its cost.',\n    },\n    routing: {\n      by_decision: byDecision,\n      straight_through_pct: pct(wentOut.length, rows.length),\n      note: 'Straight-through: the share that went out without review (PASS and PASS_WITH_NOTES). Meaningless alone; read it beside the silent error rate.',\n    },\n    reliability: {\n      llm_errors: errors,\n      error_rate_pct: pct(errors, rows.length),\n      note: 'A document whose model call failed goes to a person, never out without review.',\n    },\n    cost: {\n      total_usd: Number(total_cost.toFixed(4)),\n      per_document_usd: Number((total_cost / rows.length).toFixed(6)),\n      input_tokens: total_in,\n      output_tokens: total_out,\n      projected_usd_per_1000_docs: Number(((total_cost / rows.length) * 1000).toFixed(2)),\n    },\n    silent_errors: silentErrors.map(r => ({\n      id: r.id,\n      decision: r.decision,\n      expected: r.expected_violations,\n      found_below_threshold: (r.llm_findings || []).map(f => f.code + ' (' + f.confidence + ')'),\n      excerpt: excerpt(r),\n    })),\n    false_alarms: falseAlarms.map(r => ({ id: r.id, decision: r.decision, why: r.decision_reason, excerpt: excerpt(r) })),\n  },\n}];"
+      }
+    },
+    {
+      "id": "6c1e774f-5399-46ba-9db3-8b7b0be45d41",
+      "name": "Pass-with-Notes Log",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1232,
+        960
+      ],
+      "parameters": {
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $json.client_id }}",
+            "code": "={{ $json.code }}",
+            "confidence": "={{ $json.confidence }}",
+            "content": "={{ $json.content }}",
+            "doc_id": "={{ $json.doc_id }}",
+            "key_codes": "={{ $json.key_codes }}",
+            "key_verdict": "={{ $json.key_verdict }}",
+            "layer": "={{ $json.layer }}",
+            "quote": "={{ $json.quote }}",
+            "reasoning": "={{ $json.reasoning }}",
+            "reviewed_at": "={{ $json.reviewed_at }}",
+            "run_id": "={{ $json.run_id }}",
+            "short_by": "={{ $json.short_by }}",
+            "source": "={{ $json.source }}",
+            "state": "={{ $json.state }}",
+            "threshold": "={{ $json.threshold }}"
+          }
+        },
+        "dataTableId": {
+          "__rl": true,
+          "cachedResultName": "Compliance Reviewer: Pass-with-Notes Log",
+          "mode": "list",
+          "value": "Fd7iWkNk3WLSdzEX"
+        },
+        "operation": "insert",
+        "options": {},
+        "resource": "row"
+      }
+    },
+    {
+      "id": "ca7075c9-167c-4149-9258-8a5d716e0a26",
+      "name": "Sticky Note ab8bb12e",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        736
+      ],
+      "parameters": {
+        "color": 4,
+        "content": "## Two-layer review\n\nLayer 1 catches unambiguous violations with regex: best, #1, specialist, guarantee, results without a disclaimer, NY labeling. Free, instant, cannot hallucinate.\n\nLayer 2 catches what regex structurally cannot, such as \"get the compensation you deserve\" - an implied guarantee with no banned word.\n\nDisclaimers are stripped before scanning, because the compliant disclaimer itself contains the word \"guarantee\".",
+        "height": 576
+      }
+    },
+    {
+      "id": "6fcfcde8-36e8-445e-9d00-090c29e71b04",
+      "name": "Sticky Note Notes Log",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        992,
+        1136
+      ],
+      "parameters": {
+        "color": 5,
+        "content": "## Pass-with-notes log\n\nPASS_WITH_NOTES copy goes live without a person, so its notes are written to the data table **Compliance Reviewer: Pass-with-Notes Log**, one row per note.\n\nSort by `code` to see which problems keep coming back; `short_by` is how far the finding fell below the client's threshold. `source` separates eval-set runs from live copy.",
+        "height": 272,
+        "width": 448
+      }
+    },
+    {
+      "id": "95f4910b-9863-440e-9c07-09d142a98032",
+      "name": "Collect Notes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        960
+      ],
+      "parameters": {
+        "jsCode": "// One row per note on every PASS_WITH_NOTES document, for the Pass-with-Notes Log.\n// A note is a finding the workflow recorded but did not act on: an LLM finding below the\n// client's threshold, or an advisory rule. PASS_WITH_NOTES copy goes live without a person,\n// so this log is the only place those findings are seen. One row per note (not per\n// document), so sorting the log by code shows which problems keep coming back.\nconst thresholds = {};\nfor (const i of $('Load Clients and Eval Set').all()) thresholds[i.json.id] = i.json.auto_pass_threshold;\n\nconst rows = [];\nfor (const { json: r } of $input.all()) {\n  if (r.decision !== 'PASS_WITH_NOTES') continue;\n  const threshold = thresholds[r.id] ?? null;\n  // Eval-set documents carry an answer key; live copy does not.\n  const hasKey = Array.isArray(r.expected_violations);\n  const base = {\n    doc_id: r.id,\n    client_id: r.client_id,\n    state: r.state,\n    threshold,\n    content: r.content,\n    source: hasKey ? 'golden 500' : 'live',\n    key_verdict: hasKey ? (r.expected_flag ? 'violation' : 'clean') : '',\n    key_codes: hasKey ? r.expected_violations.join(', ') : '',\n    run_id: String($execution.id),\n    reviewed_at: r.reviewed_at,\n  };\n  // PASS_WITH_NOTES means no finding cleared its bar: every LLM finding is below the\n  // threshold and every deterministic hit is advisory.\n  for (const f of r.llm_findings || []) {\n    const c = typeof f.confidence === 'number' ? f.confidence : null;\n    rows.push({ ...base, code: f.code, layer: 'llm', confidence: c,\n      short_by: c !== null && threshold !== null ? Number((threshold - c).toFixed(2)) : null,\n      quote: f.quote || '', reasoning: f.reasoning || '' });\n  }\n  for (const h of r.deterministic_hits || []) {\n    rows.push({ ...base, code: h.code, layer: 'deterministic', confidence: null, short_by: null,\n      quote: h.matched_text || '', reasoning: h.basis || '' });\n  }\n}\nreturn rows.map(json => ({ json }));"
+      }
+    },
+    {
+      "id": "0422db15-e797-44f3-a6ca-e2b71636c90a",
+      "name": "Sticky Note dd6e919f",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        992,
+        496
+      ],
+      "parameters": {
+        "color": 3,
+        "content": "## Measured, not assumed\n\nGround truth for 500 documents (Golden 500 data table, key frozen 2026-09-24) is carried through the pipeline and compared here.\n\nThe headline is the **silent error rate**: of the copy that went out without review (PASS and PASS_WITH_NOTES), the share that needed a person. A note is not a catch; the copy still went out.\n\nBeside it, the **false alarm rate**: clean copy sent to a person. A reviewer that flags everything gets ignored in a week, and then it protects nobody.",
+        "height": 400
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Load Golden 500",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Golden 500": {
+      "main": [
+        [
+          {
+            "node": "Load Clients and Eval Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Clients and Eval Set": {
+      "main": [
+        [
+          {
+            "node": "Layer 1 Deterministic Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 1 Deterministic Scan": {
+      "main": [
+        [
+          {
+            "node": "Layer 2 LLM Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 2 LLM Review": {
+      "main": [
+        [
+          {
+            "node": "Merge and Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge and Route": {
+      "main": [
+        [
+          {
+            "node": "Scorecard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Collect Notes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Notes": {
+      "main": [
+        [
+          {
+            "node": "Pass-with-Notes Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  }
+}
